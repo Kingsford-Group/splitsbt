@@ -97,7 +97,50 @@ bool count(
     return true;
 }
 
+bool split_count(
+    std::string infilen,
+    std::string outfilen_sim,
+    std::string outfilen_dif,
+    HashPair hp,
+    int nh,
+    uint64_t bf_size,
+    int num_threads,
+    unsigned cutoff_count
+    ) {
+    
+    // jellyfish default counting values
+    const uint64_t hash_size = 10000000;
+    const uint32_t num_reprobes = 126;
+    const uint32_t counter_len = 7;
+    const bool canonical = true;
 
+    // create the hash
+    mer_hash_type mer_hash(hash_size, jellyfish::mer_dna::k()*2, counter_len, num_threads, num_reprobes);
+
+    // create a mock up of the array of file names
+    std::vector<std::string> files;
+    files.push_back(infilen);
+
+    // count the kmers
+    mer_counter counter(num_threads, mer_hash, files.begin(), files.end(), canonical);
+    counter.exec_join(num_threads);
+
+    // build the BF
+    SBF bf(outfilen_sim, outfilen_dif, hp, nh, bf_size);
+
+    // add each kmer to the BF
+    const auto jf_ary = mer_hash.ary();
+    const auto end = jf_ary->end();
+    std::cerr << "Right before cutoff count: " << cutoff_count << std::endl;
+    for(auto kmer = jf_ary->begin(); kmer != end; ++kmer) {
+        auto& key_val = *kmer;
+        if (key_val.second >= cutoff_count) {
+            bf.add(key_val.first);
+        }
+    }
+    bf.save();
+    return true;
+}
 // bt count k FASTA OUTFILE
 
  /*

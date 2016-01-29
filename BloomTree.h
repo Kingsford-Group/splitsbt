@@ -52,7 +52,7 @@ private:
 
 
 //Keeps one filename but uses "sim" and "diff" suffixes? 
-class splitBloomTree : public BloomTree {
+/*class splitBloomTree : public BloomTree {
 public:
     splitBloomTree(const std::string & f, HashPair hp, int nh);
     ~splitBloomTree();
@@ -87,7 +87,7 @@ private:
     mutable int usage_count;
     mutable bool dirty;
 }
-
+*/
 HashPair* get_hash_function(const std::string & matrix_file, int & nh);
 BloomTree* read_bloom_tree(const std::string & filename, bool read_hashes=true);
 void write_bloom_tree(const std::string & outfile, BloomTree* root, const std::string & matrix_file);
