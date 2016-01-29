@@ -12,6 +12,7 @@ BF::BF(const std::string & f, HashPair hp, int nh) :
 { 
 }
 
+/*
 BF::BF(const std::string & f, const std::string & f_2, HashPair hp, int nh) :
     filename(f),
     f2(f_2),
@@ -20,7 +21,7 @@ BF::BF(const std::string & f, const std::string & f_2, HashPair hp, int nh) :
     num_hash(nh)
 {
 }
-
+*/
 BF::~BF() {
     if (bits != nullptr) {
         delete bits;
@@ -446,8 +447,8 @@ void UncompressedBF::dif_into(const BF* f2){
 Split Bloom Tree Compressed
 */
 //====================================================================//
-SBF::SBF(const std::string & f_sim, const std::string & f_dif, HashPair hp, int nh, uint64_t size) :
-    BF(f_sim, f_dif, hp, nh),
+SBF::SBF(const std::string & f, HashPair hp, int nh, uint64_t size) :
+    BF(f, hp, nh),
     sim(nullptr),
     dif(nullptr)
 {
@@ -470,26 +471,34 @@ SBF::~SBF() {
 
 }
 
-//Before:
-// split_filename() function added to address complications with one filename to two files.
-//After:
-//Now there's two filenames.
+std::string SBF::get_sim(){
+    std::ostringstream oss;
+    oss << nosuffix(filename, std::string(".bf.bv")) << "_sim.bf.bv";
+    return oss.str();
+}
+
+std::string SBF::get_dif(){
+    std::ostringstream oss;
+    oss << nosuffix(filename, std::string(".bf.bv")) << "_dif.bf.bv";
+    return oss.str();
+}
+
 void SBF::load() {
     // read the actual bits
     assert(sim == nullptr);
     assert(dif == nullptr);
     sim = new sdsl::bit_vector();
     dif = new sdsl::bit_vector();
-    sdsl::load_from_file(*sim, filename);
-    sdsl::load_from_file(*dif, f2);
+
+    sdsl::load_from_file(*sim, this->get_sim());
+    sdsl::load_from_file(*dif, this->get_dif());
 }
 
 void SBF::save() {
     std::cerr << "Saving BF to " << filename << std::endl;
-    sdsl::store_to_file(*sim, filename);
-    sdsl::store_to_file(*dif, f2);
+    sdsl::store_to_file(*sim, this->get_sim());
+    sdsl::store_to_file(*dif, this->get_dif());
 }
-
 
 uint64_t SBF::size() const {
     uint64_t sim_size = sim->size();
@@ -525,13 +534,13 @@ void SBF::unset_difbit(uint64_t p){
 
 // When SBF unions, similar elements must be removed from both previous filters.
 // That is going to be handled separately. 
-BF* SBF::union_with(const std::string & new_sim, std::string & new_dif, const BF* f2) const {
+BF* SBF::union_with(const std::string & new_name, const BF* f2) const {
     assert(size() == f2->size());
     const SBF* b = dynamic_cast<const SBF*>(f2);
     if (b == nullptr) {
         DIE("Can only union two uncompressed BF");
     }
-    SBF* out = new SBF(new_sim, new_dif, hashes, num_hash);
+    SBF* out = new SBF(new_name, hashes, num_hash);
     out->sim = sim_bv_fast(*this->sim, *b->sim); //sim filter is sim of two sim filters
     sdsl::bit_vector* new_diff = dif_bv_fast(*this->sim, *b->sim); //Dif filter is union of dif filters and new differences
     sdsl::bit_vector* temp = union_bv_fast(*this->dif, *b->dif); //Dif filters can be directly unioned
@@ -668,10 +677,9 @@ void SBF::compress() {
     sdsl::rrr_vector<255> rrr_dif(*dif);
 	std::cerr << "Compressed RRR sim vector is " << sdsl::size_in_mega_bytes(rrr_sim) << std::endl;
 	std::cerr << "Compressed RRR diff vector is " << sdsl::size_in_mega_bytes(rrr_dif) << std::endl;
-    sdsl::store_to_file(rrr_sim,filename+".rrr");
-	sdsl::store_to_file(rrr_dif,f2+".rrr");
+    sdsl::store_to_file(rrr_sim,this->get_sim()+".rrr");
+	sdsl::store_to_file(rrr_dif,this->get_dif()+".rrr");
 }
-
 
 BF* SBF::sim_with(const std::string & new_name, const BF* f2) const{
     DIE("Not used - union is both sim and dif union");

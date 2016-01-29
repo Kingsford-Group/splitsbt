@@ -14,7 +14,7 @@ class BF {
 public:
     BF(const std::string & filename, HashPair hp, int nh);
     //Added overloaded method to store second filename
-    BF(const std::string & f1, const std::string & f2, HashPair hp, int nh);
+    //BF(const std::string & f1, const std::string & f2, HashPair hp, int nh);
     virtual ~BF();
 
     virtual void load();
@@ -44,8 +44,6 @@ public:
 
 protected:
     std::string filename;
-    //Added second filename
-    std::string f2;
     sdsl::rrr_vector<255>* bits;
 
     HashPair hashes;
@@ -82,19 +80,25 @@ protected:
 
 class SBF : public BF {
 public:
-    SBF(const std::string & filename, const std::string & f2, HashPair hp, int nh, uint64_t size = 0);
+    SBF(const std::string & filename, HashPair hp, int nh, uint64_t size = 0);
 
     virtual ~SBF();
 
     virtual void load();
     virtual void save();
 
+    virtual std::string get_sim();
+    virtual std::string get_dif();
+
     virtual int operator[](uint64_t pos) const;
     virtual void set_bit(uint64_t p);
+    virtual void set_difbit(uint64_t p);
+    virtual void unset_bit(uint64_t p);
+    virtual void unset_difbit(uint64_t p);
     virtual uint64_t size() const;
     virtual uint64_t similarity(const BF* other, int type) const;
     virtual std::tuple<uint64_t, uint64_t> b_similarity(const BF* other) const;
-    virtual BF* union_with(const std::string & new_sim, std::string & new_dif, const BF* f2) const;
+    virtual BF* union_with(const std::string & new_name, const BF* f2) const;
     virtual void union_into(const BF* f2);
     virtual uint64_t count_ones() const;
     virtual void compress();
@@ -113,7 +117,9 @@ protected:
 sdsl::bit_vector* union_bv_fast(const sdsl::bit_vector & b1, const sdsl::bit_vector& b2);
 BF* load_bf_from_file(const std::string & fn, HashPair hp, int nh);
 
+// sim == and
 sdsl::bit_vector* sim_bv_fast(const sdsl::bit_vector & b1, const sdsl::bit_vector& b2);
+// dif == xor
 sdsl::bit_vector* dif_bv_fast(const sdsl::bit_vector & b1, const sdsl::bit_vector& b2);
 
 std::string split_filename(const std::string & new_name);

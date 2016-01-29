@@ -99,8 +99,7 @@ bool count(
 
 bool split_count(
     std::string infilen,
-    std::string outfilen_sim,
-    std::string outfilen_dif,
+    std::string outfilen,
     HashPair hp,
     int nh,
     uint64_t bf_size,
@@ -126,7 +125,7 @@ bool split_count(
     counter.exec_join(num_threads);
 
     // build the BF
-    SBF bf(outfilen_sim, outfilen_dif, hp, nh, bf_size);
+    SBF bf(outfilen, hp, nh, bf_size);
 
     // add each kmer to the BF
     const auto jf_ary = mer_hash.ary();
