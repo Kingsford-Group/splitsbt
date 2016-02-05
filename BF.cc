@@ -471,15 +471,16 @@ SBF::~SBF() {
 
 }
 
-std::string SBF::get_sim(){
+//If filename has sim suffix, this is unnecessary. Keeping only for legacy / parallelism
+std::string SBF::get_sim_name(){
     std::ostringstream oss;
-    oss << nosuffix(filename, std::string(".bf.bv")) << "_sim.bf.bv";
+    oss << nosuffix(filename, std::string(".sim.bf.bv")) << ".sim.bf.bv";
     return oss.str();
 }
 
-std::string SBF::get_dif(){
+std::string SBF::get_dif_name(){
     std::ostringstream oss;
-    oss << nosuffix(filename, std::string(".bf.bv")) << "_dif.bf.bv";
+    oss << nosuffix(filename, std::string(".sim.bf.bv")) << ".dif.bf.bv";
     return oss.str();
 }
 
@@ -490,14 +491,14 @@ void SBF::load() {
     sim = new sdsl::bit_vector();
     dif = new sdsl::bit_vector();
 
-    sdsl::load_from_file(*sim, this->get_sim());
-    sdsl::load_from_file(*dif, this->get_dif());
+    sdsl::load_from_file(*sim, this->get_sim_name());
+    sdsl::load_from_file(*dif, this->get_dif_name());
 }
 
 void SBF::save() {
     std::cerr << "Saving BF to " << filename << std::endl;
-    sdsl::store_to_file(*sim, this->get_sim());
-    sdsl::store_to_file(*dif, this->get_dif());
+    sdsl::store_to_file(*sim, this->get_sim_name());
+    sdsl::store_to_file(*dif, this->get_dif_name());
 }
 
 uint64_t SBF::size() const {
@@ -533,6 +534,7 @@ void SBF::unset_difbit(uint64_t p){
 
 
 // When SBF unions, similar elements must be removed from both previous filters.
+// Elements which are no longer similar must also be re-introduced to previous filters
 // That is going to be handled separately. 
 BF* SBF::union_with(const std::string & new_name, const BF* f2) const {
     assert(size() == f2->size());
@@ -572,6 +574,9 @@ void SBF::union_into(const BF* f2) {
 
 // Similarity could mean something different for SBF versus BF but right now it doesnt.
 // This function simply is adapted to compare xor and or by combining dif and sim
+
+//XXX: Is it physically impossible to have similarity in two filter's differences?
+// (Is thie method only called in situations where the filters are in the same subtree?)
 uint64_t SBF::similarity(const BF* other, int type) const {
     assert(other->size() == size());
 
@@ -677,8 +682,70 @@ void SBF::compress() {
     sdsl::rrr_vector<255> rrr_dif(*dif);
 	std::cerr << "Compressed RRR sim vector is " << sdsl::size_in_mega_bytes(rrr_sim) << std::endl;
 	std::cerr << "Compressed RRR diff vector is " << sdsl::size_in_mega_bytes(rrr_dif) << std::endl;
-    sdsl::store_to_file(rrr_sim,this->get_sim()+".rrr");
-	sdsl::store_to_file(rrr_dif,this->get_dif()+".rrr");
+    sdsl::store_to_file(rrr_sim,this->get_sim_name()+".rrr");
+	sdsl::store_to_file(rrr_dif,this->get_dif_name()+".rrr");
+}
+
+// Takes in f2 (parent filter in standard use-case)
+// Removes any element in sim filter present in f2
+// xor works because anything in sim is in original filter by definition.
+void SBF::remove_duplicate(BF* f2){
+    assert(size() == f2->size());
+
+    const SBF* b = dynamic_cast<const SBF*>(f2);
+    if (b == nullptr) {
+        DIE("remove_duplicates requires two SBFs");
+    }
+    uint64_t* b1_data = this->sim->data();
+    const uint64_t* b2_data = b->sim->data();
+    sdsl::bit_vector::size_type len = size()>>6;
+    for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+        *b1_data = (*b1_data) ^ (*b2_data++);
+        b1_data++;
+    }
+}
+
+// adds values from input vector to sim filter.
+void SBF::add_different(const sdsl::bit_vector & new_dif){
+    this->sim=union_bv_fast(*this->sim, new_dif);
+}
+
+// computes a raw similarity vector (bitwise '&') between this and input (f2)
+// type == 0 : sim vector
+// type == 1 : dif vector
+sdsl::bit_vector* SBF::calc_sim_bv(const BF* f2, int type){
+    const SBF* b = dynamic_cast<const SBF*>(f2);
+    if (b == nullptr) {
+        DIE("calc_sim_bv requires two SBFs");
+    }
+
+    if (type == 0) {
+        return sim_bv_fast(*this->sim, *b->sim); 
+    } else if (type == 1) { 
+        return sim_bv_fast(*this->dif, *b->dif);
+    } else {
+        DIE("Invalid type.");
+        // pointless filler to have return statement
+        return sim_bv_fast(*this->sim, *b->sim);
+    }
+}
+
+// computes a raw difference vector (bitwise '^') between this and input (f2)
+sdsl::bit_vector* SBF::calc_dif_bv(const BF* f2, int type){
+    const SBF* b = dynamic_cast<const SBF*>(f2);
+    if (b == nullptr) {
+        DIE("calc_dif_bv requires two SBFs");
+    }
+
+    if (type == 0) {
+        return dif_bv_fast(*this->sim, *b->sim); 
+    } else if (type == 1) { 
+        return dif_bv_fast(*this->dif, *b->dif);
+    } else {
+        DIE("Invalid type.");
+        // pointless filler to have return statement
+        return dif_bv_fast(*this->sim, *b->sim);
+    }
 }
 
 BF* SBF::sim_with(const std::string & new_name, const BF* f2) const{
@@ -686,7 +753,6 @@ BF* SBF::sim_with(const std::string & new_name, const BF* f2) const{
     UncompressedBF* out = new UncompressedBF(new_name, hashes, num_hash);
     return out;
 }
-
 
 void SBF::sim_into(const BF* f2){
     DIE("Not used - union is both sim and dif union");
@@ -728,7 +794,9 @@ sdsl::bit_vector* union_bv_fast(const sdsl::bit_vector & b1, const sdsl::bit_vec
 BF* load_bf_from_file(const std::string & fn, HashPair hp, int nh) {
     if (fn.substr(fn.size()-4) == ".rrr") {
         return new BF(fn, hp, nh);
-    } else if (fn.substr(fn.size()-3) == ".bv") {
+    } else if (fn.substr(fn.size()-10) == ".sim.bf.bv") { //Record name as .sim but load both sim / dif
+        return new SBF(fn, hp, nh);
+    }else if (fn.substr(fn.size()-3) == ".bv") {
         return new UncompressedBF(fn, hp, nh);
     } else {
         DIE("unknown bloom filter filetype (make sure extension is .rrr or .bv)");

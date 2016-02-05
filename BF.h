@@ -87,8 +87,8 @@ public:
     virtual void load();
     virtual void save();
 
-    virtual std::string get_sim();
-    virtual std::string get_dif();
+    virtual std::string get_sim_name();
+    virtual std::string get_dif_name();
 
     virtual int operator[](uint64_t pos) const;
     virtual void set_bit(uint64_t p);
@@ -102,6 +102,15 @@ public:
     virtual void union_into(const BF* f2);
     virtual uint64_t count_ones() const;
     virtual void compress();
+
+    // Consider using bit_vectors for both.
+    // Would like for both of these to be constant but having problems
+    virtual void remove_duplicate(BF* f2);
+    virtual void add_different(const sdsl::bit_vector & new_dif);
+
+    // Accessor functions to perform simple and or xor operations on sim or dif filters
+    virtual sdsl::bit_vector* calc_sim_bv(const BF* f2, int type);
+    virtual sdsl::bit_vector* calc_dif_bv(const BF* f2, int type);
 
     virtual BF* sim_with(const std::string & new_name, const BF* f2) const;
     virtual void sim_into(const BF* f2);

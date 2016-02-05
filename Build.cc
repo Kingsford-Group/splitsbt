@@ -1,5 +1,6 @@
 #include "Build.h"
 #include "BloomTree.h"
+#include "SplitBloomTree.h"
 #include "util.h"
 #include "Query.h"
 #include <cmath>
@@ -374,8 +375,109 @@ BloomTree* insert_bloom_tree(BloomTree* T, BloomTree* N, int type) {
     return root;
 }
 
+// walk down T, finding the best path; insert N (which could be a subtree) at the leaf
+// we come to, and union all the parents
+SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, int type) {
+
+    std::cerr << "Inserting leaf " << N->name() << " ... " << std::endl;
+    // save the root to return
+    SplitBloomTree* root = T;
+
+    // handle the case of inserting into an empty tree
+    if (T == nullptr) {
+        N->set_parent(nullptr);
+        return N;
+    }
+
+    // until we fall off the tree (should insert before then)
+    int depth = 0;
+    int best_child = -1;
+    SplitBloomTree* parent = nullptr;
+
+    while (T != nullptr) {
+        std::cerr << "At node: " << T->name() << std::endl;
+        T->increment_usage();
+        if (T->num_children() == 0) {
+            // this is the tricky case: T is currently a leaf, which means it
+            // represents an SRA file, and so it has to stay a leaf. So what we
+            // must do is replace T by a new union fiilter T -->
+            // NewNode{child0=T, child1=N}
+            std::ostringstream oss;
+            oss << nosuffix(N->name(), std::string(".sim.bf.bv")) << "_union.sim.bf.bv";
+            std::cerr << "Splitting leaf into " << oss.str() 
+                << " at depth " << depth << std::endl;
+
+            SplitBloomTree* NewNode = T->union_bloom_filters(oss.str(), N);
+            std::cerr << "   1:" << NewNode->child(0)->name() << std::endl;
+            std::cerr << "   2:" << NewNode->child(1)->name() << std::endl;
+
+            if (parent == nullptr) {
+                return NewNode;
+            } else {
+                assert(best_child != -1);
+                assert(parent != nullptr);
+                parent->set_child(best_child, NewNode);
+                return root;
+            }
+        } else if (T->num_children() == 1) {
+            // This function will not function properly since the inserted node will not obey
+            // similarity / difference processing during the union step.
+            DIE("Insertion should never have a single child in a tree.");
+            // union the new filter with this node
+            T->union_into(N);
+            
+            // insert into first empty child
+            for (int i =0; i < 2; i++) {
+                if (T->child(i) == nullptr) {
+                    std::cerr << "Adding as " << ((i==0)?"left":"right") 
+                        << " child." << std::endl;
+                    T->set_child(i, N);
+                    return root;
+                }
+            }
+            DIE("Something is wrong!");
+        } else {
+            // find the most similar child and move to it
+            uint64_t best_sim = 0;
+            best_child = -1;
+            for (int i = 0; i < 2; i++) {
+                T->child(i)->increment_usage();
+                uint64_t sim = T->child(i)->similarity(N,type);
+                std::cerr << "Child " << i << " sim =" << sim << std::endl;
+                if (sim >= best_sim) {
+                    best_sim = sim;
+                    best_child = i;
+                }
+            }
+            
+            // union the new filter with this node
+            T->union_into(N);
+
+            // move the current ptr to the most similar child
+            std::cerr << "Moving to " << ((best_child==0)?"left":"right") 
+                << " child: " << best_child << " " << best_sim << std::endl;
+            parent = T;
+            T = T->child(best_child);
+        }
+        depth++;
+    }
+    assert(T != 0);
+
+    return root;
+}
+
 // delete a tree
 void delete_bloom_tree(BloomTree* T) {
+    if (T->child(0) != nullptr) {
+        delete_bloom_tree(T->child(0));
+    }
+    if (T->child(1) != nullptr) {
+        delete_bloom_tree(T->child(1));
+    }
+    delete T;
+}
+
+void delete_bloom_tree(SplitBloomTree* T) {
     if (T->child(0) != nullptr) {
         delete_bloom_tree(T->child(0));
     }
@@ -448,17 +550,17 @@ void dynamic_splitbuild(
     int nh = 0;
     HashPair* hashes = get_hash_function(hashes_file, nh); 
 
-    BloomTree* root = nullptr;
+    SplitBloomTree* root = nullptr;
     
     //int count = 0;
     // for every leaf
     std::cerr << "Inserting leaves into tree..." << std::endl;
     for (const auto & leaf : leaves) {
         // create the node that points to the filter we just saved
-        BloomTree* N = new BloomTree(leaf, *hashes, nh);
+        SplitBloomTree* N = new SplitBloomTree(leaf, *hashes, nh);
         
         //  insert this new leaf
-        root = insert_bloom_tree(root, N, type);
+        root = insert_split_bloom_tree(root, N, type);
 
 	/*
         count++;
@@ -480,93 +582,7 @@ void dynamic_splitbuild(
     delete_bloom_tree(root);
 }
 
-// walk down T, finding the best path; insert N (which could be a subtree) at the leaf
-// we come to, and union all the parents
-BloomTree* insert_split_bloom_tree(BloomTree* T, BloomTree* N, int type) {
 
-    std::cerr << "Inserting leaf " << N->name() << " ... " << std::endl;
-    // save the root to return
-    BloomTree* root = T;
-
-    // handle the case of inserting into an empty tree
-    if (T == nullptr) {
-        N->set_parent(nullptr);
-        return N;
-    }
-
-    // until we fall off the tree (should insert before then)
-    int depth = 0;
-    int best_child = -1;
-    BloomTree* parent = nullptr;
-
-    while (T != nullptr) {
-        std::cerr << "At node: " << T->name() << std::endl;
-        T->increment_usage();
-        if (T->num_children() == 0) {
-            // this is the tricky case: T is currently a leaf, which means it
-            // represents an SRA file, and so it has to stay a leaf. So what we
-            // must do is replace T by a new union fiilter T -->
-            // NewNode{child0=T, child1=N}
-            std::ostringstream oss;
-            oss << nosuffix(N->name(), std::string(".bf.bv")) << "_union.bf.bv";
-            std::cerr << "Splitting leaf into " << oss.str() 
-                << " at depth " << depth << std::endl;
-
-            BloomTree* NewNode = T->union_bloom_filters(oss.str(), N);
-            std::cerr << "   1:" << NewNode->child(0)->name() << std::endl;
-            std::cerr << "   2:" << NewNode->child(1)->name() << std::endl;
-
-            if (parent == nullptr) {
-                return NewNode;
-            } else {
-                assert(best_child != -1);
-                assert(parent != nullptr);
-                parent->set_child(best_child, NewNode);
-                return root;
-            }
-        } else if (T->num_children() == 1) {
-            // union the new filter with this node
-            T->union_into(N);
-            
-            // insert into first empty child
-            for (int i =0; i < 2; i++) {
-                if (T->child(i) == nullptr) {
-                    std::cerr << "Adding as " << ((i==0)?"left":"right") 
-                        << " child." << std::endl;
-                    T->set_child(i, N);
-                    return root;
-                }
-            }
-            DIE("Something is wrong!");
-        } else {
-            // find the most similar child and move to it
-            uint64_t best_sim = 0;
-            best_child = -1;
-            for (int i = 0; i < 2; i++) {
-                T->child(i)->increment_usage();
-                uint64_t sim = T->child(i)->similarity(N,type);
-                std::cerr << "Child " << i << " sim =" << sim << std::endl;
-                if (sim >= best_sim) {
-                    best_sim = sim;
-                    best_child = i;
-                }
-            }
-            
-            // union the new filter with this node
-            T->union_into(N);
-
-            // move the current ptr to the most similar child
-            std::cerr << "Moving to " << ((best_child==0)?"left":"right") 
-                << " child: " << best_child << " " << best_sim << std::endl;
-            parent = T;
-            T = T->child(best_child);
-        }
-        depth++;
-    }
-    assert(T != 0);
-
-    return root;
-}
 
 
 
