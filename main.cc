@@ -1,6 +1,7 @@
 #include "Query.h"
 #include "Build.h"
 #include "BloomTree.h"
+#include "SplitBloomTree.h"
 #include "BF.h"
 #include "util.h"
 #include "Count.h"
@@ -265,13 +266,13 @@ int main(int argc, char* argv[]) {
         int nh;
         HashPair* hp = get_hash_function(hashes_file, nh);
 	std::cerr << "Cutoff Count: " << cutoff_count << std::endl;
-        count(query_file, out_file, *hp, nh, bf_size, num_threads, cutoff_count);
+        split_count(query_file, out_file, *hp, nh, bf_size, num_threads, cutoff_count);
 
     } else if (command == "build") {
         std::cerr << "Building..." << std::endl;
         std::vector<std::string> leaves = read_filter_list(query_file); //not a query file
         //build_bt_from_jfbloom(leaves, out_file, parallel_level);
-        dynamic_build(hashes_file, leaves, out_file, sim_type); //std::stoi(sim_type));
+        dynamic_splitbuild(hashes_file, leaves, out_file, sim_type); //std::stoi(sim_type));
 
     } else if (command == "compress") {
         std::cerr << "Compressing.." << std::endl;
@@ -300,13 +301,13 @@ int main(int argc, char* argv[]) {
 
         //UncompressedBF sim_bf(of_sim, *hp, nh, bf1->size());
         //UncompressedBF dif_bf(of_dif, *hp, nh, bf1->size());
-        BF* sim_bf = bf1->sim_with(of_sim, bf2);
-        BF* dif_bf = bf1->dif_with(of_dif, bf2);
+        //BF* sim_bf = bf1->sim_with(of_sim, bf2);
+        //BF* dif_bf = bf1->dif_with(of_dif, bf2);
         
         //sim_bf.union_into(bf1);
         
-        sim_bf->save();
-        dif_bf->save();
+        //sim_bf->save();
+        //dif_bf->save();
 
     }
     std::cerr << "Done." << std::endl;

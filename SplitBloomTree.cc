@@ -135,6 +135,7 @@ bool SplitBloomTree::load() const {
         bloom_filter = load_bf_from_file(filename, hashes, num_hash);
         const SBF* b = dynamic_cast<const SBF*>(bloom_filter);
         if (b == nullptr) {
+            std::cerr << filename << std::endl;
             DIE("Split Bloom Filter can only load SSBF.");
         }
 
