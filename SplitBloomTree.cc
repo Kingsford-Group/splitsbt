@@ -217,13 +217,19 @@ void SplitBloomTree::union_into(const SplitBloomTree* other) {
     if (my_bf == nullptr) {
         DIE("Split Bloom Filter can only load SSBF.");
     }
+    SBF* other_bf = dynamic_cast<SBF*>(other->bf());
+    if (other_bf == nullptr) {
+        DIE("Split Bloom Filter bf() should be SBF.");
+    }
     // new differences are things which were similar at this node until other was added to the tree.
-    sdsl::bit_vector* new_dif = my_bf->calc_dif_bv(other->bf(),0); 
+    sdsl::bit_vector* new_dif = my_bf->calc_dif_bv(other_bf,0); 
 
     // After determing what is different we can then perform the original union.
     protected_cache(true);
-    my_bf->union_into(other->bf());
+    my_bf->union_into(other_bf);
+    other_bf->remove_duplicate(my_bf); 
     dirty = true;
+    other->dirty = true;
     protected_cache(false);
 
     // We now add back elements which are no longer universally similar to the children

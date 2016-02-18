@@ -23,5 +23,4 @@ bool split_count(
     int num_threads = 16,
     unsigned cutoff_count = 3
     );
-
 #endif

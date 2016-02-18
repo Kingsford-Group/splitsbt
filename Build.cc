@@ -437,6 +437,9 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
             }
             DIE("Something is wrong!");
         } else {
+            // union the new filter with this node
+            T->union_into(N);
+            
             // find the most similar child and move to it
             uint64_t best_sim = 0;
             best_child = -1;
@@ -450,9 +453,6 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
                 }
             }
             
-            // union the new filter with this node
-            T->union_into(N);
-
             // move the current ptr to the most similar child
             std::cerr << "Moving to " << ((best_child==0)?"left":"right") 
                 << " child: " << best_child << " " << best_sim << std::endl;

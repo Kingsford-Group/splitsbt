@@ -569,6 +569,8 @@ void SBF::union_into(const BF* f2) {
         *b1_dif_data = ((*b1_dif_data) | (*b2_dif_data)) | ((*b1_sim_data) ^ (*b2_sim_data));
         b1_sim_data++;
         b1_dif_data++;
+        b2_sim_data++;
+        b2_dif_data++;
     }
 }
 
@@ -612,7 +614,12 @@ uint64_t SBF::similarity(const BF* other, int type) const {
 		uint64_t count = 0;
 		sdsl::bit_vector::size_type len = size()>>6;
                 for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
-                       count += __builtin_popcountl( ((*b1_sim_data) ^ (*b2_sim_data)) | ((*b1_dif_data) ^ (*b2_dif_data)) ); 
+                       count += __builtin_popcountl( ((*b1_sim_data) ^ (*b2_sim_data)) | ((*b1_dif_data) ^ (*b2_dif_data)) );
+                        b1_sim_data++;
+                        b1_dif_data++;
+                        b2_sim_data++;
+                        b2_dif_data++;
+ 
                 }
 		return size() - count;
 	}
