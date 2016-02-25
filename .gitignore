@@ -1,0 +1,7 @@
+*.o
+*.swp
+*.bf.bv.rrr
+*.bf.bv
+temp*
+*.dot
+*.hh

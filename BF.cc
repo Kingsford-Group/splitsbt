@@ -488,17 +488,28 @@ void SBF::load() {
     // read the actual bits
     assert(sim == nullptr);
     assert(dif == nullptr);
+    
     sim = new sdsl::bit_vector();
-    dif = new sdsl::bit_vector();
+    std::string fn = this->get_sim_name();    
 
-    sdsl::load_from_file(*sim, this->get_sim_name());
-    sdsl::load_from_file(*dif, this->get_dif_name());
+    sdsl::load_from_file(*sim, fn);
+
+    if (fn.substr(fn.size()-15) == "union.sim.bf.bv"){
+        dif = new sdsl::bit_vector(); 
+        sdsl::load_from_file(*dif, this->get_dif_name());
+    } else {
+        dif = new sdsl::bit_vector(sim->size());
+    }
 }
 
 void SBF::save() {
     std::cerr << "Saving BF to " << filename << std::endl;
     sdsl::store_to_file(*sim, this->get_sim_name());
-    sdsl::store_to_file(*dif, this->get_dif_name());
+    std::string fn = this->get_sim_name();    
+
+    if (fn.substr(fn.size()-15) == "union.sim.bf.bv"){
+        sdsl::store_to_file(*dif, this->get_dif_name());
+    }
 }
 
 uint64_t SBF::size() const {
@@ -686,11 +697,15 @@ uint64_t SBF::count_ones() const {
 
 void SBF::compress() {
 	sdsl::rrr_vector<255> rrr_sim(*sim);
-    sdsl::rrr_vector<255> rrr_dif(*dif);
-	std::cerr << "Compressed RRR sim vector is " << sdsl::size_in_mega_bytes(rrr_sim) << std::endl;
-	std::cerr << "Compressed RRR diff vector is " << sdsl::size_in_mega_bytes(rrr_dif) << std::endl;
-    sdsl::store_to_file(rrr_sim,this->get_sim_name()+".rrr");
-	sdsl::store_to_file(rrr_dif,this->get_dif_name()+".rrr");
+    std::string fn = this->get_sim_name();
+    std::cerr << "Compressed RRR sim vector is " << sdsl::size_in_mega_bytes(rrr_sim) << std::endl; 
+    sdsl::store_to_file(rrr_sim,fn+".rrr");
+
+    if (fn.substr(fn.size()-15) == "union.sim.bf.bv"){
+        sdsl::rrr_vector<255> rrr_dif(*dif);
+		std::cerr << "Compressed RRR diff vector is " << sdsl::size_in_mega_bytes(rrr_dif) << std::endl;
+        sdsl::store_to_file(rrr_dif, this->get_dif_name()+".rrr");
+    }
 }
 
 // Takes in f2 (parent filter in standard use-case)
