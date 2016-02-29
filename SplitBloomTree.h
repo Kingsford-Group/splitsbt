@@ -34,8 +34,6 @@ public:
     Heap<const SplitBloomTree>::heap_reference* get_heap_ref();
     static void protected_cache(bool b);
 
-    void force_dirty_unload();
-
 private:
     bool load() const;
     void unload() const;

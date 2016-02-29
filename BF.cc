@@ -562,6 +562,9 @@ BF* SBF::union_with(const std::string & new_name, const BF* f2) const {
     return out;
 }
 
+
+// The sim vector is the intersection of sim vectors
+// The difference vector is union of dif filters and new differences
 void SBF::union_into(const BF* f2) {
     assert(size() == f2->size());
 
@@ -730,7 +733,13 @@ void SBF::remove_duplicate(BF* f2){
 
 // adds values from input vector to sim filter.
 void SBF::add_different(const sdsl::bit_vector & new_dif){
-    this->sim=union_bv_fast(*this->sim, new_dif);
+    sdsl::bit_vector* temp = union_bv_fast(*this->sim, new_dif);
+    delete this->sim;
+    this->sim = temp;
+    
+
+// The sim vector is the intersection of sim vectors
+// The difference vector is union of dif filters and new differences;
 }
 
 // computes a raw similarity vector (bitwise '&') between this and input (f2)

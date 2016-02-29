@@ -417,7 +417,6 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
                 assert(best_child != -1);
                 assert(parent != nullptr);
                 parent->set_child(best_child, NewNode);
-                //NewNode->force_dirty_unload();
                 return root;
             }
         } else if (T->num_children() == 1) {

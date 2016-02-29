@@ -21,13 +21,11 @@ SplitBloomTree::SplitBloomTree(
     hashes(hp),
     num_hash(nh),
     bloom_filter(0),
-    //heap_ref(nullptr),
+    heap_ref(nullptr),
     parent(0),
     usage_count(0),
     dirty(false)
 {
-    heap_ref = bf_cache.insert(this, usage());
-
     children[0] = nullptr;
     children[1] = nullptr;
 }
@@ -105,16 +103,6 @@ void SplitBloomTree::unload() const {
         bloom_filter = nullptr; 
     }
     dirty = false;
-}
-
-// This should not be used.
-void SplitBloomTree::force_dirty_unload() {
-    if (dirty==true){
-        std::cerr << filename << " was already dirty!" << std::endl;
-    } else{
-        dirty = true;
-    }
-    unload(); 
 }
 
 void SplitBloomTree::drain_cache() {
@@ -232,7 +220,8 @@ SplitBloomTree* SplitBloomTree::union_bloom_filters(const std::string & new_name
 
     //bf_cache.insert(bt, bt->usage());
     bt->dirty = true;
-    //bt->unload();
+    bt->unload();
+
     std::cerr << "Cache size (end): " << cache_size() << std::endl; 
     protected_cache(false);
     return bt; 
