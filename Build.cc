@@ -417,6 +417,7 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
                 assert(best_child != -1);
                 assert(parent != nullptr);
                 parent->set_child(best_child, NewNode);
+                //NewNode->force_dirty_unload();
                 return root;
             }
         } else if (T->num_children() == 1) {
@@ -456,6 +457,7 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
             // move the current ptr to the most similar child
             std::cerr << "Moving to " << ((best_child==0)?"left":"right") 
                 << " child: " << best_child << " " << best_sim << std::endl;
+            //std::cerr << "Heap size " << T->cache_size() << std::endl; 
             parent = T;
             T = T->child(best_child);
         }

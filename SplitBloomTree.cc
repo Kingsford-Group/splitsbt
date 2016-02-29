@@ -21,11 +21,13 @@ SplitBloomTree::SplitBloomTree(
     hashes(hp),
     num_hash(nh),
     bloom_filter(0),
-    heap_ref(nullptr),
+    //heap_ref(nullptr),
     parent(0),
     usage_count(0),
     dirty(false)
 {
+    heap_ref = bf_cache.insert(this, usage());
+
     children[0] = nullptr;
     children[1] = nullptr;
 }
@@ -50,6 +52,9 @@ void SplitBloomTree::set_child(int which, SplitBloomTree* c) {
     assert(which >= 0 || which < 2);
     c->parent = this;
     children[which] = c;
+    //if (c->get_heap_ref()==nullptr){
+    //    c->set_heap_ref(bf_cache.insert(c, usage()));
+    //}
 }
 
 int SplitBloomTree::num_children() const {
@@ -88,7 +93,8 @@ void SplitBloomTree::increment_usage() const {
 // Frees the memory associated with the bloom filter
 void SplitBloomTree::unload() const { 
     // you can't unload something until you remove it from the cache
-    // DEBUG std::cerr << "Unloading " << name() << std::endl;
+    // DEBUG 
+    std::cerr << "Unloading " << name() << std::endl;
     
     // free the memory
     if (bloom_filter != nullptr) {
@@ -99,6 +105,16 @@ void SplitBloomTree::unload() const {
         bloom_filter = nullptr; 
     }
     dirty = false;
+}
+
+// This should not be used.
+void SplitBloomTree::force_dirty_unload() {
+    if (dirty==true){
+        std::cerr << filename << " was already dirty!" << std::endl;
+    } else{
+        dirty = true;
+    }
+    unload(); 
 }
 
 void SplitBloomTree::drain_cache() {
@@ -119,6 +135,18 @@ void SplitBloomTree::protected_cache(bool b) {
     if (!b) {
         SplitBloomTree::drain_cache();
     }
+}
+
+int SplitBloomTree::cache_size() {
+    return bf_cache.size();
+}
+
+void SplitBloomTree::set_heap_ref(Heap<const SplitBloomTree>::heap_reference* hr) {
+    heap_ref = hr;
+}
+
+Heap<const SplitBloomTree>::heap_reference* SplitBloomTree::get_heap_ref() {
+    return heap_ref;
 }
 
 // Loads the bloom filtering into memory
@@ -173,6 +201,10 @@ std::tuple<uint64_t,uint64_t> SplitBloomTree::b_similarity(SplitBloomTree* other
 // in two other nodes;
 // These nodes were not previously linked and thus we dont have any 'new differences' to add back in
 SplitBloomTree* SplitBloomTree::union_bloom_filters(const std::string & new_name, SplitBloomTree* f2) {
+
+    std::cerr << "Cache size (start): " << cache_size() << std::endl;
+    protected_cache(true);
+
     SBF* other_bf = dynamic_cast<SBF*>(f2->bf());
     if (other_bf == nullptr) {
         DIE("Split Bloom Filter bf() should be SBF.");
@@ -182,11 +214,10 @@ SplitBloomTree* SplitBloomTree::union_bloom_filters(const std::string & new_name
         DIE("Split Bloom Filter can only load SSBF.");
     }
 
-
     SplitBloomTree* bt = new SplitBloomTree(new_name, hashes, num_hash);
 
     // We first union the two key nodes and save it as a new node.
-    protected_cache(true);
+    //protected_cache(true);
     bt->bloom_filter = my_bf->union_with(new_name, other_bf); 
 
     bt->set_child(0, this);
@@ -200,10 +231,9 @@ SplitBloomTree* SplitBloomTree::union_bloom_filters(const std::string & new_name
     f2->dirty = true;
 
     //bf_cache.insert(bt, bt->usage());
-    // Why do we unload here?
     bt->dirty = true;
-    bt->unload();
-
+    //bt->unload();
+    std::cerr << "Cache size (end): " << cache_size() << std::endl; 
     protected_cache(false);
     return bt; 
 }
@@ -213,6 +243,10 @@ SplitBloomTree* SplitBloomTree::union_bloom_filters(const std::string & new_name
 // Could have zero or two children. (IT SHOULD BE IMPOSSIBLE TO HAVE ONE CHILD)
 void SplitBloomTree::union_into(const SplitBloomTree* other) {
     //SplitBloomTree* temp = new SplitBloomTree("temporary.sim.bf.bv", hashes, num_hash);
+
+    std::cerr << "Cache size (start): " << cache_size() << std::endl;
+    protected_cache(true);
+
     SBF* my_bf = dynamic_cast<SBF*>(bf());
     if (my_bf == nullptr) {
         DIE("Split Bloom Filter can only load SSBF.");
@@ -225,29 +259,36 @@ void SplitBloomTree::union_into(const SplitBloomTree* other) {
     sdsl::bit_vector* new_dif = my_bf->calc_dif_bv(other_bf,0); 
 
     // After determing what is different we can then perform the original union.
-    protected_cache(true);
+    //protected_cache(true);
     my_bf->union_into(other_bf);
     other_bf->remove_duplicate(my_bf); 
     dirty = true;
     other->dirty = true;
-    protected_cache(false);
+    //protected_cache(false);
 
     // We now add back elements which are no longer universally similar to the children
     // This is inefficient - if we know the insert path we could just place this at the lowest level of divergence.
     if (child(0) != nullptr){
-        SBF* cbf = dynamic_cast<SBF*>(child(0)->bf());
-        if (cbf == nullptr) {
+        SBF* cbf0 = dynamic_cast<SBF*>(child(0)->bf());
+        if (cbf0 == nullptr) {
             DIE("child bf() should be SBF.");
         }
-        cbf->add_different(*new_dif);
+        cbf0->add_different(*new_dif);
+        child(0)->dirty = true;
     }
     if (child(1) != nullptr){
-        SBF* cbf = dynamic_cast<SBF*>(child(1)->bf());
-        if (cbf == nullptr) {
+        SBF* cbf1 = dynamic_cast<SBF*>(child(1)->bf());
+        if (cbf1 == nullptr) {
             DIE("child bf() should be SBF.");
         }
-        cbf->add_different(*new_dif);
+        cbf1->add_different(*new_dif);
+        child(1)->dirty = true;
     }
+    std::cerr << "Cache size (end): " << cache_size() << std::endl; 
+    protected_cache(false);
+
+    delete new_dif;
+
 }
 
 /*

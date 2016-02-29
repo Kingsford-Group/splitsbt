@@ -491,7 +491,6 @@ void SBF::load() {
     
     sim = new sdsl::bit_vector();
     std::string fn = this->get_sim_name();    
-
     sdsl::load_from_file(*sim, fn);
 
     if (fn.substr(fn.size()-15) == "union.sim.bf.bv"){
@@ -558,6 +557,8 @@ BF* SBF::union_with(const std::string & new_name, const BF* f2) const {
     sdsl::bit_vector* new_diff = dif_bv_fast(*this->sim, *b->sim); //Dif filter is union of dif filters and new differences
     sdsl::bit_vector* temp = union_bv_fast(*this->dif, *b->dif); //Dif filters can be directly unioned
     out->dif = union_bv_fast(*temp, *new_diff);
+    delete temp;
+    delete new_diff;
     return out;
 }
 
