@@ -135,6 +135,11 @@ uint64_t BF::similarity(const BF* other, int type) const {
     return 0;
 }
 
+uint64_t BF::similarity(const BF* other, sdsl::bit_vector & add, int type) const {
+    DIE("not yet implemented");
+    return 0;
+}
+
 std::tuple<uint64_t, uint64_t> BF::b_similarity(const BF* other) const {
     DIE("not yet implemented");
     return std::make_tuple(0,0);
@@ -205,6 +210,10 @@ BF* BF::dif_with(const std::string & new_name, const BF* f2) const{
     return out;
 }
 void BF::dif_into(const BF* f2){
+    DIE("not yet implemented");
+}
+
+void BF::add_accumulation(sdsl::bit_vector & accum){
     DIE("not yet implemented");
 }
 
@@ -350,15 +359,6 @@ std::tuple<uint64_t, uint64_t> UncompressedBF::b_similarity(const BF* other) con
 // 01 = 1
 // 10 = 1
 // 11 = 0
-
-int popcount(uint64_t b) {
-    int count = 0;
-    for (int i = 0; i < 64; i++) {
-        if (b % 2) count++;
-        b >>= 1;
-    }
-    return count;
-}
 
 // return the # of 1s in the bitvector
 uint64_t UncompressedBF::count_ones() const {
@@ -550,7 +550,7 @@ BF* SBF::union_with(const std::string & new_name, const BF* f2) const {
     assert(size() == f2->size());
     const SBF* b = dynamic_cast<const SBF*>(f2);
     if (b == nullptr) {
-        DIE("Can only union two uncompressed BF");
+        DIE("Can only union two SBF");
     }
     SBF* out = new SBF(new_name, hashes, num_hash);
     out->sim = sim_bv_fast(*this->sim, *b->sim); //sim filter is sim of two sim filters
@@ -570,7 +570,7 @@ void SBF::union_into(const BF* f2) {
 
     const SBF* b = dynamic_cast<const SBF*>(f2);
     if (b == nullptr) {
-        DIE("Can only union two uncompressed BF");
+        DIE("Can only union two SBF");
     }
 
     uint64_t* b1_sim_data = this->sim->data();
@@ -625,7 +625,7 @@ uint64_t SBF::similarity(const BF* other, int type) const {
    
     	return uint64_t(float(or_count - xor_count) / float(or_count) * size() );
 	}
-	else if (type == 0) {
+	else if (type == -1) { // XXX: This is primed to be deleted but placeholder for now
 		uint64_t count = 0;
 		sdsl::bit_vector::size_type len = size()>>6;
                 for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
@@ -637,12 +637,85 @@ uint64_t SBF::similarity(const BF* other, int type) const {
  
                 }
 		return size() - count;
-	}
+	} else if (type == 0) {
+ 		uint64_t count = 0;
+		sdsl::bit_vector::size_type len = size()>>6;
+        for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+            count += __builtin_popcountl( ((*b1_sim_data) | (*b1_dif_data)) ^ ((*b2_sim_data) | (*b2_dif_data)));
+            b1_sim_data++;
+            b1_dif_data++;
+            b2_sim_data++;
+            b2_dif_data++;
+        } 
+        return size()-count;
+    }
 	
 	DIE("ERROR: ONLY TWO TYPES IMPLEMENTED");
 	return 0;
 }
 
+uint64_t SBF::similarity(const BF* other, sdsl::bit_vector & accum, int type) const {
+    assert(other->size() == size());
+    assert(accum.size() = size());
+
+    const uint64_t* b1_sim_data = this->sim->data();
+    const uint64_t* b1_dif_data = this->dif->data();
+    const uint64_t* acc_data = accum.data();
+
+    const SBF* o = dynamic_cast<const SBF*>(other);
+    if (o == nullptr) {
+        DIE("Can only compute similarity on same type of BF.");
+    }
+
+    const uint64_t* b2_sim_data = o->sim->data();
+    const uint64_t* b2_dif_data = o->dif->data();
+
+    if (type == 1) {
+		uint64_t xor_count = 0;
+	   	uint64_t or_count = 0;
+    
+		sdsl::bit_vector::size_type len = size()>>6;
+		for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+        		xor_count += __builtin_popcountl( ((*b1_sim_data) ^ (*b2_sim_data)) | ((*b1_dif_data) ^ (*b2_dif_data)) );
+	        	or_count += __builtin_popcountl( ((*b1_sim_data) | (*b2_sim_data)) | ((*b1_dif_data) | (*b2_dif_data)) );
+                b1_sim_data++;
+                b1_dif_data++;
+                b2_sim_data++;
+                b2_dif_data++;
+			//count += __builtin_popcountl((*b1_data++) ^ (*b2_data++));
+  	  	}
+   
+    	return uint64_t(float(or_count - xor_count) / float(or_count) * size() );
+	}
+	else if (type == -1) { // XXX: This is primed to be deleted but placeholder for now
+		uint64_t count = 0;
+		sdsl::bit_vector::size_type len = size()>>6;
+                for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+                       count += __builtin_popcountl( ((*b1_sim_data) ^ (*b2_sim_data)) | ((*b1_dif_data) ^ (*b2_dif_data)) );
+                        b1_sim_data++;
+                        b1_dif_data++;
+                        b2_sim_data++;
+                        b2_dif_data++;
+ 
+                }
+		return size() - count;
+	} else if (type == 0) {
+ 		uint64_t count = 0;
+		sdsl::bit_vector::size_type len = size()>>6;
+        for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+            count += __builtin_popcountl( ((*b1_sim_data) | (*b1_dif_data) | (*acc_data)) ^ ((*b2_sim_data) | (*b2_dif_data)));
+            b1_sim_data++;
+            b1_dif_data++;
+            b2_sim_data++;
+            b2_dif_data++;
+            acc_data++;
+        } 
+        return size()-count;
+    }
+	
+	DIE("ERROR: ONLY TWO TYPES IMPLEMENTED");
+	return 0;
+}
 
 std::tuple<uint64_t, uint64_t> SBF::b_similarity(const BF* other) const {
     DIE("b_similarity has two bit vectors now. This method is not used");
@@ -736,11 +809,27 @@ void SBF::add_different(const sdsl::bit_vector & new_dif){
     sdsl::bit_vector* temp = union_bv_fast(*this->sim, new_dif);
     delete this->sim;
     this->sim = temp;
+} 
+
+//Basically a reverse accessor method that saves the union of two bit vectors
+//to the bit vector being added in
+void SBF::add_accumulation(sdsl::bit_vector & accum){
+    assert(size() == accum.size());
     
+    uint64_t* acc_data = accum.data();
+    const uint64_t* b1_sim_data = this->sim->data();
+    //const uint64_t* b1_dif_data = this->dif->data();
+
+    sdsl::bit_vector::size_type len = size()>>6;
+    for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+        *acc_data = (*acc_data) | (*b1_sim_data++) ;
+    }
+}
+
 
 // The sim vector is the intersection of sim vectors
 // The difference vector is union of dif filters and new differences;
-}
+
 
 // computes a raw similarity vector (bitwise '&') between this and input (f2)
 // type == 0 : sim vector
@@ -780,6 +869,23 @@ sdsl::bit_vector* SBF::calc_dif_bv(const BF* f2, int type){
     }
 }
 
+sdsl::bit_vector* SBF::calc_union_bv(const BF* f2, int type){
+    const SBF* b = dynamic_cast<const SBF*>(f2);
+    if (b == nullptr) {
+        DIE("calc_dif_bv requires two SBFs");
+    }
+
+    if (type == 0) {
+        return union_bv_fast(*this->sim, *b->sim); 
+    } else if (type == 1) { 
+        return union_bv_fast(*this->dif, *b->dif);
+    } else {
+        DIE("Invalid type.");
+        // pointless filler to have return statement
+        return union_bv_fast(*this->sim, *b->sim);
+    }
+}
+
 BF* SBF::sim_with(const std::string & new_name, const BF* f2) const{
     DIE("Not used - union is both sim and dif union");
     UncompressedBF* out = new UncompressedBF(new_name, hashes, num_hash);
@@ -800,8 +906,44 @@ void SBF::dif_into(const BF* f2){
     DIE("Not used - union is both sim and dif");
 }
 
+// returns true iff the bloom filter contains the given kmer
+// zero looks at sim, one looks at dif
+/*
+bool SBF::contains(const jellyfish::mer_dna & m, int type) const {
+    //std::cout << "TESTING STUFF: " << m.to_str() << std::endl;
+    std::string temp = m.to_str();
+    jellyfish::mer_dna n = jellyfish::mer_dna(temp);
+    n.canonicalize();
+    //std::cout << "Canonical version! " << n.to_str() << std::endl;
+    uint64_t h0 = hashes.m1.times(n);
+    uint64_t h1 = hashes.m2.times(n);
 
+    //DEBUG: std::cout << "size = " << bits->size() << std::endl;
+    
+    const size_t base = h0 % size();
+    const size_t inc = h1 % size();
 
+    for (unsigned long i = 0; i < num_hash; ++i) {
+        const size_t pos = (base + i * inc) % size();
+        //DEBUG: std::cout << "pos=" << pos << std::endl;
+        if(type == 0){
+            if ((*sim)[pos] == 0) return false;
+        } else if (type == 1){
+            if ((*dif)[pos] == 0) return false;
+        } else {
+            DIE("Error - only sim/dif filter 'types'!");
+        }
+    }
+    return true;
+}
+
+// convience function
+// ironically it looks like we convert back to string and then back to mer_dna.
+// XXX: should probably clean that up once we get a stable build going
+bool SBF::contains(const std::string & str, int type) const {
+    return contains(jellyfish::mer_dna(str), type);
+}
+*/
 
 /*
 Misc Code elements

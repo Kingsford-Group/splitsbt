@@ -30,6 +30,7 @@ public:
     void add(const jellyfish::mer_dna & m);
 
     virtual uint64_t similarity(const BF* other, int type) const;
+    virtual uint64_t similarity(const BF* other, sdsl::bit_vector & add, int type) const;
     virtual std::tuple<uint64_t, uint64_t> b_similarity(const BF* other) const;
     virtual BF* union_with(const std::string & new_name, const BF* f2) const;
     virtual void union_into(const BF* f2);
@@ -42,6 +43,8 @@ public:
     virtual BF* dif_with(const std::string & new_name, const BF* f2) const;
     virtual void dif_into(const BF* f2);
 
+    // Things which are not used in all cases but were added to save time in interface
+    virtual void add_accumulation(sdsl::bit_vector & accum);
 protected:
     std::string filename;
     sdsl::rrr_vector<255>* bits;
@@ -97,6 +100,7 @@ public:
     virtual void unset_difbit(uint64_t p);
     virtual uint64_t size() const;
     virtual uint64_t similarity(const BF* other, int type) const;
+    virtual uint64_t similarity(const BF* other, sdsl::bit_vector & acc, int type) const;
     virtual std::tuple<uint64_t, uint64_t> b_similarity(const BF* other) const;
     virtual BF* union_with(const std::string & new_name, const BF* f2) const;
     virtual void union_into(const BF* f2);
@@ -107,16 +111,20 @@ public:
     // Would like for both of these to be constant but having problems
     virtual void remove_duplicate(BF* f2);
     virtual void add_different(const sdsl::bit_vector & new_dif);
-
+    virtual void add_accumulation(sdsl::bit_vector & accum);
     // Accessor functions to perform simple and or xor operations on sim or dif filters
     virtual sdsl::bit_vector* calc_sim_bv(const BF* f2, int type);
     virtual sdsl::bit_vector* calc_dif_bv(const BF* f2, int type);
+    virtual sdsl::bit_vector* calc_union_bv(const BF* f2, int type);
 
     virtual BF* sim_with(const std::string & new_name, const BF* f2) const;
     virtual void sim_into(const BF* f2);
 
     virtual BF* dif_with(const std::string & new_name, const BF* f2) const;
     virtual void dif_into(const BF* f2);
+
+    //virtual bool contains(const jellyfish::mer_dna & m, int type) const;
+    //bool contains(std::string str, int type) const;
 protected:
     sdsl::bit_vector* sim;
     sdsl::bit_vector* dif;

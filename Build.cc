@@ -380,6 +380,7 @@ BloomTree* insert_bloom_tree(BloomTree* T, BloomTree* N, int type) {
 SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, int type) {
 
     std::cerr << "Inserting leaf " << N->name() << " ... " << std::endl;
+
     // save the root to return
     SplitBloomTree* root = T;
 
@@ -393,6 +394,7 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
     int depth = 0;
     int best_child = -1;
     SplitBloomTree* parent = nullptr;
+    sdsl::bit_vector* accum_sim = new sdsl::bit_vector(root->bf()->size(),0); 
 
     while (T != nullptr) {
         std::cerr << "At node: " << T->name() << std::endl;
@@ -439,13 +441,27 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
         } else {
             // union the new filter with this node
             T->union_into(N);
-            
+            T->bf()->add_accumulation(*accum_sim);
+
+
+            uint64_t* data = accum_sim->data();
+            sdsl::bit_vector::size_type len = accum_sim->size()>>6;
+            uint64_t count = 0;
+            for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+                int pc = popcount(*data);
+                DIE_IF(pc != __builtin_popcountl(*data), "popcountl and us disagree about popcount");
+                data++;
+                count += pc;
+    }
+
+
+            std::cerr << "Number of ones " << count << std::endl;
             // find the most similar child and move to it
             uint64_t best_sim = 0;
             best_child = -1;
             for (int i = 0; i < 2; i++) {
                 T->child(i)->increment_usage();
-                uint64_t sim = T->child(i)->similarity(N,type);
+                uint64_t sim = T->child(i)->similarity(N,*accum_sim,type);
                 std::cerr << "Child " << i << " sim =" << sim << std::endl;
                 if (sim >= best_sim) {
                     best_sim = sim;

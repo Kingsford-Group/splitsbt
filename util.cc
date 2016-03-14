@@ -123,3 +123,12 @@ std::string VectorAsString(const std::vector<std::string> & in, const std::strin
     }
     return oss.str();
 }
+
+int popcount(uint64_t b) {
+    int count = 0;
+    for (int i = 0; i < 64; i++) {
+        if (b % 2) count++;
+        b >>= 1;
+    }
+    return count;
+}

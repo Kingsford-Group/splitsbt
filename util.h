@@ -65,4 +65,6 @@ std::string SetAsString(const std::set<std::string> &,  const std::string & = " 
 
 std::string VectorAsString(const std::vector<std::string> &, const std::string & = " ");
 
+int popcount(uint64_t b);
+
 #endif

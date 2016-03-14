@@ -174,6 +174,13 @@ uint64_t SplitBloomTree::similarity(SplitBloomTree* other, int type) const {
     return sim;
 }
 
+uint64_t SplitBloomTree::similarity(SplitBloomTree* other, sdsl::bit_vector & accum, int type) const {
+    protected_cache(true);
+    uint64_t sim = this->bf()->similarity(other->bf(), accum, type);
+    protected_cache(false);
+    return sim;
+}
+
 //Add type to this?
 std::tuple<uint64_t,uint64_t> SplitBloomTree::b_similarity(SplitBloomTree* other) const{
     protected_cache(true);
@@ -255,7 +262,7 @@ void SplitBloomTree::union_into(const SplitBloomTree* other) {
     other->dirty = true;
     //protected_cache(false);
 
-    // We now add back elements which are no longer universally similar to the children
+    // We now add back elements which are no longer universally similar in the children
     // This is inefficient - if we know the insert path we could just place this at the lowest level of divergence.
     if (child(0) != nullptr){
         SBF* cbf0 = dynamic_cast<SBF*>(child(0)->bf());
