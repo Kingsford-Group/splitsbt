@@ -174,7 +174,7 @@ uint64_t SplitBloomTree::similarity(SplitBloomTree* other, int type) const {
     return sim;
 }
 
-uint64_t SplitBloomTree::similarity(SplitBloomTree* other, sdsl::bit_vector & accum, int type) const {
+uint64_t SplitBloomTree::similarity(SplitBloomTree* other, UncompressedBF* accum, int type) const {
     protected_cache(true);
     uint64_t sim = this->bf()->similarity(other->bf(), accum, type);
     protected_cache(false);
@@ -214,13 +214,23 @@ SplitBloomTree* SplitBloomTree::union_bloom_filters(const std::string & new_name
     // We first union the two key nodes and save it as a new node.
     //protected_cache(true);
     bt->bloom_filter = my_bf->union_with(new_name, other_bf); 
-
+    std::cerr << "Num 1s (New Filter Sim): " << bt->bf()->count_ones(0) << std::endl;
+    std::cerr << "Num 1s (New Filter Dif): " << bt->bf()->count_ones(1) << std::endl;
+    std::cerr << "Num 1s (Left Node Sim): " << my_bf->count_ones(0) << std::endl;
+    std::cerr << "Num 1s (Left Node Dif): " << my_bf->count_ones(1) << std::endl;
+    std::cerr << "Num 1s (Right Node Sim): " << other_bf->count_ones(0) << std::endl;
+    std::cerr << "Num 1s (Right Node Dif): " << other_bf->count_ones(1) << std::endl;
     bt->set_child(0, this);
     bt->set_child(1, f2);
 
     //Here we remove elements from the union's sim from each child's sim
     my_bf->remove_duplicate(bt->bf());
     other_bf->remove_duplicate(bt->bf());
+    std::cerr << "AFTER REMOVING DUPLICATES " << std::endl;    
+    std::cerr << "Num 1s (Left Node Sim): " << my_bf->count_ones(0) << std::endl;
+    std::cerr << "Num 1s (Left Node Dif): " << my_bf->count_ones(1) << std::endl;
+    std::cerr << "Num 1s (Right Node Sim): " << other_bf->count_ones(0) << std::endl;
+    std::cerr << "Num 1s (Right Node Dif): " << other_bf->count_ones(1) << std::endl;
 
     this->dirty = true;
     f2->dirty = true;
@@ -252,7 +262,8 @@ void SplitBloomTree::union_into(const SplitBloomTree* other) {
         DIE("Split Bloom Filter bf() should be SBF.");
     }
     // new differences are things which were similar at this node until other was added to the tree.
-    sdsl::bit_vector* new_dif = my_bf->calc_dif_bv(other_bf,0); 
+    // OR ARE BITS WHICH ARE NEW TO THE TREE SOURCED FROM OTHER_BF
+    sdsl::bit_vector* new_dif = my_bf->calc_new_dif_bv(other_bf); 
 
     // After determing what is different we can then perform the original union.
     //protected_cache(true);

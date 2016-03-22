@@ -21,7 +21,7 @@ public:
     void set_parent(const SplitBloomTree* p);
     const SplitBloomTree* get_parent() const;
     uint64_t similarity(SplitBloomTree* other, int type) const;
-    uint64_t similarity(SplitBloomTree* other, sdsl::bit_vector & accum, int type) const;
+    uint64_t similarity(SplitBloomTree* other, UncompressedBF* accum, int type) const;
     std::tuple<uint64_t, uint64_t> b_similarity(SplitBloomTree* other) const;
     BF* bf() const;
 

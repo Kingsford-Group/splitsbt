@@ -394,7 +394,16 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
     int depth = 0;
     int best_child = -1;
     SplitBloomTree* parent = nullptr;
-    sdsl::bit_vector* accum_sim = new sdsl::bit_vector(root->bf()->size(),0); 
+    // Should probably be a copy constructor of some kind
+    // Initialize vector
+    //std::string accname = "accumulator";
+    //UncompressedBF* accum_sim = new UncompressedBF(accname, root->bf());
+    //accum_sim->bv = new sdsl::bit_vector(root->bf()->size(),0);
+    std::cerr << "Num #1s (Curr): " << root->bf()->count_ones(0) << std::endl; 
+    //std::cerr << "Num #1s (Accum): " << accum_sim->count_ones() << std::endl;
+
+    //union_bv_fast(*T->sim, *T->sim);
+    //sdsl::bit_vector* accum_sim = new sdsl::bit_vector(root->bf()->size(),0); 
 
     while (T != nullptr) {
         std::cerr << "At node: " << T->name() << std::endl;
@@ -408,6 +417,9 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
             oss << nosuffix(N->name(), std::string(".sim.bf.bv")) << "_union.sim.bf.bv";
             std::cerr << "Splitting leaf into " << oss.str() 
                 << " at depth " << depth << std::endl;
+
+            //std::cerr << "Num #1s (Curr): " << T->bf()->count_ones() << std::endl; 
+            //std::cerr << "Num #1s (Accum): " << accum_sim->count_ones() << std::endl;
 
             SplitBloomTree* NewNode = T->union_bloom_filters(oss.str(), N);
             std::cerr << "   1:" << NewNode->child(0)->name() << std::endl;
@@ -440,10 +452,25 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
             DIE("Something is wrong!");
         } else {
             // union the new filter with this node
+            std::cerr << "Num 1s (N Pre-Union Sim): " << N->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (N Pre-Union Dif): " << N->bf()->count_ones(1) << std::endl;
+            std::cerr << "Num 1s (Left Child Sim): " << T->child(0)->bf()->count_ones(0) << std::endl;
+            std::cerr << "Num 1s (Right Child Sim): " << T->child(1)->bf()->count_ones(0) << std::endl;
             T->union_into(N);
-            T->bf()->add_accumulation(*accum_sim);
+            std::cerr << "Num 1s (N Post-Union Sim): " << N->bf()->count_ones(0) << std::endl;
+            std::cerr << "Num 1s (Left Child Sim): " << T->child(0)->bf()->count_ones(0) << std::endl;
+            std::cerr << "Num 1s (Right Child Sim): " << T->child(1)->bf()->count_ones(0) << std::endl;
 
+            //std::cerr << "Num 1s (N Post-Union Dif): " << N->bf()->count_ones(1) << std::endl;
+          
+            //std::cerr << "Num 1s (Before Accum): " << accum_sim->count_ones() << std::endl; 
+            //std::cerr << "Num 1s (Curr): " << T->bf()->count_ones(0) << std::endl; 
+            
+            //accum_sim->add_accumulation(T->bf());
+            //std::cerr << "Num 1s (Accum): " << accum_sim->count_ones() << std::endl;
 
+            //T->bf()->add_accumulation(*accum_sim);
+/*
             uint64_t* data = accum_sim->data();
             sdsl::bit_vector::size_type len = accum_sim->size()>>6;
             uint64_t count = 0;
@@ -456,12 +483,14 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
 
 
             std::cerr << "Number of ones " << count << std::endl;
+            */
             // find the most similar child and move to it
             uint64_t best_sim = 0;
             best_child = -1;
             for (int i = 0; i < 2; i++) {
                 T->child(i)->increment_usage();
-                uint64_t sim = T->child(i)->similarity(N,*accum_sim,type);
+                std::cerr << "Child " << i << " number of ones = " << T->child(i)->bf()->count_ones(0) << std::endl;
+                uint64_t sim = T->child(i)->similarity(N,type);
                 std::cerr << "Child " << i << " sim =" << sim << std::endl;
                 if (sim >= best_sim) {
                     best_sim = sim;
@@ -572,6 +601,10 @@ void dynamic_splitbuild(
     //int count = 0;
     // for every leaf
     std::cerr << "Inserting leaves into tree..." << std::endl;
+
+    //const std::string tname = "accumulator";
+    //UncompressedBF* accum = new UncompressedBF(tname, *hashes, nh);
+
     for (const auto & leaf : leaves) {
         // create the node that points to the filter we just saved
         SplitBloomTree* N = new SplitBloomTree(leaf, *hashes, nh);

@@ -12,6 +12,12 @@ BF::BF(const std::string & f, HashPair hp, int nh) :
 { 
 }
 
+BF::BF(const std::string & f, BF* copy){
+    DIE("Compressed BF can't be copied (yet)");
+    filename=f;
+    //bits(copy_bv_fast(copy->bf()));
+}
+
 /*
 BF::BF(const std::string & f, const std::string & f_2, HashPair hp, int nh) :
     filename(f),
@@ -85,6 +91,14 @@ uint64_t BF::size() const {
     return bits->size();
 }
 
+HashPair BF::get_hashes() {
+    return hashes;
+}
+
+int BF::get_num_hash() {
+    return num_hash;
+}
+
 int BF::operator[](uint64_t pos) const {
     return (*bits)[pos];
 }
@@ -135,7 +149,7 @@ uint64_t BF::similarity(const BF* other, int type) const {
     return 0;
 }
 
-uint64_t BF::similarity(const BF* other, sdsl::bit_vector & add, int type) const {
+uint64_t BF::similarity(const BF* other, BF* accum, int type) const {
     DIE("not yet implemented");
     return 0;
 }
@@ -152,6 +166,11 @@ void BF::union_into(const BF* other) {
 
 uint64_t BF::count_ones() const {
     DIE("not yet implemented");
+    return 0;
+}
+
+uint64_t BF::count_ones(int type) const {
+    DIE("not yet implemented.");
     return 0;
 }
 
@@ -231,6 +250,24 @@ UncompressedBF::UncompressedBF(const std::string & f, HashPair hp, int nh, uint6
     }
 }
 
+UncompressedBF::UncompressedBF(const std::string & f, BF* copy) :
+    BF(f, copy->get_hashes(), copy->get_num_hash()),
+    bv(nullptr)
+{
+    UncompressedBF* b = dynamic_cast<UncompressedBF*>(copy);
+    SBF* b2 = dynamic_cast<SBF*>(copy);
+    if (b != nullptr) {
+        if (b->bv != nullptr){    
+            bv=copy_bv_fast(*b->bv);
+        }   
+    } else if(b2 != nullptr) { //This isn't actually copying - its for accumulation!
+        if (b2->sim != nullptr){
+            bv=copy_bv_fast(*b2->sim);    
+        }
+    } else{
+        DIE("Could not copy BF!");
+    }
+}
 
 UncompressedBF::~UncompressedBF() {
     // call to base destructor happens automatically
@@ -377,6 +414,23 @@ uint64_t UncompressedBF::count_ones() const {
     return count;
 }
 
+uint64_t UncompressedBF::count_ones(int type) const {
+    DIE("UncompressedBF doesn't use 'type' variable");
+    uint64_t* data = bv->data();
+    sdsl::bit_vector::size_type len = bv->size()>>6;
+    uint64_t count = 0;
+    for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+        int pc = popcount(*data);
+        DIE_IF(pc != __builtin_popcountl(*data), "popcountl and us disagree about popcount");
+        data++;
+        count += pc;
+    }
+
+    sdsl::rank_support_v<> rbv(bv);
+    DIE_IF(rbv.rank(bv->size()) != count, "SDSL and us disagree about number of 1s");
+    return count;
+}
+
 void UncompressedBF::compress() {
 	sdsl::rrr_vector<255> rrr(*bv);
 	std::cerr << "Compressed RRR vector is " << sdsl::size_in_mega_bytes(rrr) << std::endl;
@@ -443,6 +497,26 @@ void UncompressedBF::dif_into(const BF* f2){
     }
 }
 
+void UncompressedBF::add_accumulation(BF* f2){
+    assert(size() == f2->size());
+
+    SBF* b = dynamic_cast<SBF*>(f2);
+    if (b == nullptr) {
+        DIE("Accumulation is SBF->UncompressedBF");
+    }
+    
+    uint64_t* acc_data = this->bv->data();
+    const uint64_t* b1_sim_data = b->sim->data();
+    //const uint64_t* b1_dif_data = this->dif->data();
+
+    sdsl::bit_vector::size_type len = size()>>6;
+    for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+        *acc_data = (*acc_data) | (*b1_sim_data++);
+        acc_data++;
+    }
+
+}
+
 /*
 Split Bloom Tree Compressed
 */
@@ -458,6 +532,23 @@ SBF::SBF(const std::string & f, HashPair hp, int nh, uint64_t size) :
     }
 }
 
+SBF::SBF(const std::string & f, BF* copy) :
+    BF(f, copy->get_hashes(), copy->get_num_hash()),
+    sim(nullptr),
+    dif(nullptr)
+{
+    const SBF* b = dynamic_cast<SBF*>(copy);
+    if (b == nullptr) {
+        DIE("Can only copy SBF");
+    }
+    
+    if (b->sim != nullptr){
+        sim = copy_bv_fast(*b->sim);
+    }
+    if (b->dif != nullptr){
+        dif = copy_bv_fast(*b->dif);
+    }
+}
 
 SBF::~SBF() {
     // call to base destructor happens automatically
@@ -654,13 +745,18 @@ uint64_t SBF::similarity(const BF* other, int type) const {
 	return 0;
 }
 
-uint64_t SBF::similarity(const BF* other, sdsl::bit_vector & accum, int type) const {
+uint64_t SBF::similarity(const BF* other, BF* accum, int type) const {
     assert(other->size() == size());
-    assert(accum.size() = size());
+    assert(accum->size() = size());
 
     const uint64_t* b1_sim_data = this->sim->data();
     const uint64_t* b1_dif_data = this->dif->data();
-    const uint64_t* acc_data = accum.data();
+
+    UncompressedBF* acc = dynamic_cast<UncompressedBF*>(accum);
+    if (acc == nullptr) {
+        DIE("Accumulation BF must be uncompressedBF.");
+    }
+    const uint64_t* acc_data = acc->bv->data();
 
     const SBF* o = dynamic_cast<const SBF*>(other);
     if (o == nullptr) {
@@ -772,6 +868,39 @@ uint64_t SBF::count_ones() const {
     return count_sim+count_dif;
 }
 
+uint64_t SBF::count_ones(int type) const {
+    // sim type ==0
+    if (type == 0) {
+        uint64_t* sim_data = sim->data();
+        sdsl::bit_vector::size_type len = size()>>6;
+        uint64_t count_sim=0;
+        for (sdsl::bit_vector::size_type p =0; p < len; ++p) {
+            int pc = popcount(*sim_data);
+            DIE_IF(pc != __builtin_popcountl(*sim_data), "pocountl and us disagree about popcount (dif)");
+            sim_data++;
+            count_sim += pc;
+        }
+        sdsl::rank_support_v<> rbv(sim);
+        DIE_IF(rbv.rank(size()) != count_sim, "SDSL and us disagree about number of 1s (dif)");
+        return count_sim;
+    } else if (type == 1) {
+        uint64_t* dif_data = dif->data();
+        sdsl::bit_vector::size_type len = size()>>6;
+        uint64_t count_dif=0;
+        for (sdsl::bit_vector::size_type p =0; p < len; ++p) {
+            int pc = popcount(*dif_data);
+            DIE_IF(pc != __builtin_popcountl(*dif_data), "pocountl and us disagree about popcount (dif)");
+            dif_data++;
+            count_dif += pc;
+        }
+        sdsl::rank_support_v<> rbv(dif);
+        DIE_IF(rbv.rank(size()) != count_dif, "SDSL and us disagree about number of 1s (dif)");
+        return count_dif;
+    }
+    DIE("Invalid type specified!");
+    return -1;
+}
+
 void SBF::compress() {
 	sdsl::rrr_vector<255> rrr_sim(*sim);
     std::string fn = this->get_sim_name();
@@ -805,14 +934,40 @@ void SBF::remove_duplicate(BF* f2){
 }
 
 // adds values from input vector to sim filter.
+// XXX: Can be rewritten to union to existing bit vector rather than make a new one?
 void SBF::add_different(const sdsl::bit_vector & new_dif){
     sdsl::bit_vector* temp = union_bv_fast(*this->sim, new_dif);
     delete this->sim;
     this->sim = temp;
 } 
 
+void SBF::add_accumulation(BF* f2){
+    DIE("Accumulation isn't a SBF (right now)");
+}
+
+// Calculates what was removed [from this node] by the 'and' operation of sim vectors.
+// XXX: This is also super inefficient because we do the same calculation in union_into
+// but we can't edit the vector in this stage of the process
+sdsl::bit_vector* SBF::calc_new_dif_bv(const BF* f2){
+    const SBF* b = dynamic_cast<const SBF*>(f2);
+    if (b == nullptr) {
+        DIE("calc_sim_bv requires two SBFs");
+    }
+    sdsl::bit_vector* new_dif = sim_bv_fast(*this->sim, *b->sim);
+    uint64_t* ndif_data = new_dif->data();
+    const uint64_t* osim_data = this->sim->data();
+    sdsl::bit_vector::size_type len = size()>>6;
+    for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+        *ndif_data = (*ndif_data) ^ (*osim_data++);
+        ndif_data++;
+    }
+    return new_dif;
+}
+
 //Basically a reverse accessor method that saves the union of two bit vectors
 //to the bit vector being added in
+
+/*
 void SBF::add_accumulation(sdsl::bit_vector & accum){
     assert(size() == accum.size());
     
@@ -822,10 +977,10 @@ void SBF::add_accumulation(sdsl::bit_vector & accum){
 
     sdsl::bit_vector::size_type len = size()>>6;
     for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
-        *acc_data = (*acc_data) | (*b1_sim_data++) ;
+        *acc_data = (*acc_data++) | (*b1_sim_data++) ;
     }
 }
-
+*/
 
 // The sim vector is the intersection of sim vectors
 // The difference vector is union of dif filters and new differences;
@@ -1004,6 +1159,18 @@ sdsl::bit_vector* dif_bv_fast(const sdsl::bit_vector & b1, const sdsl::bit_vecto
     sdsl::bit_vector::size_type len = b1.size()>>6;
     for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
         (*out_data++) = (*b1_data++) ^ (*b2_data++);
+    }
+    return out;
+}
+
+sdsl::bit_vector* copy_bv_fast(const sdsl::bit_vector & b1){
+    sdsl::bit_vector* out = new sdsl::bit_vector(b1.size(), 0);
+    uint64_t* out_data = out->data();
+
+    const uint64_t* b1_data = b1.data();
+    sdsl::bit_vector::size_type len = b1.size()>>6;
+    for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+        (*out_data++) = (*b1_data++);
     }
     return out;
 }

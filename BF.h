@@ -13,6 +13,7 @@ using HashPair = jellyfish::hash_pair<jellyfish::mer_dna>;
 class BF {
 public:
     BF(const std::string & filename, HashPair hp, int nh);
+    BF(const std::string & filename, BF* copy);
     //Added overloaded method to store second filename
     //BF(const std::string & f1, const std::string & f2, HashPair hp, int nh);
     virtual ~BF();
@@ -24,17 +25,21 @@ public:
     virtual void set_bit(uint64_t p);
     virtual uint64_t size() const;
 
+    virtual HashPair get_hashes();
+    virtual int get_num_hash();
+
     virtual bool contains(const jellyfish::mer_dna & m) const;
     bool contains(const std::string & str) const;
 
     void add(const jellyfish::mer_dna & m);
 
     virtual uint64_t similarity(const BF* other, int type) const;
-    virtual uint64_t similarity(const BF* other, sdsl::bit_vector & add, int type) const;
+    virtual uint64_t similarity(const BF* other, BF* accum, int type) const;
     virtual std::tuple<uint64_t, uint64_t> b_similarity(const BF* other) const;
     virtual BF* union_with(const std::string & new_name, const BF* f2) const;
     virtual void union_into(const BF* f2);
     virtual uint64_t count_ones() const;
+    virtual uint64_t count_ones(int type) const;
     virtual void compress();
 
     virtual BF* sim_with(const std::string & new_name, const BF* f2) const;
@@ -54,9 +59,10 @@ protected:
 };
 
 class UncompressedBF : public BF {
+friend class SBF;
 public:
     UncompressedBF(const std::string & filename, HashPair hp, int nh, uint64_t size = 0);
-
+    UncompressedBF(const std::string & filename, BF* copy);
     virtual ~UncompressedBF();
 
     virtual void load();
@@ -70,6 +76,7 @@ public:
     virtual BF* union_with(const std::string & new_name, const BF* f2) const;
     virtual void union_into(const BF* f2);
     virtual uint64_t count_ones() const;
+    virtual uint64_t count_ones(int type) const;
     virtual void compress();
 
     virtual BF* sim_with(const std::string & new_name, const BF* f2) const;
@@ -77,14 +84,17 @@ public:
 
     virtual BF* dif_with(const std::string & new_name, const BF* f2) const;
     virtual void dif_into(const BF* f2);
+
+    virtual void add_accumulation(BF* f2);
 protected:
     sdsl::bit_vector* bv;
 };
 
 class SBF : public BF {
+friend class UncompressedBF;
 public:
     SBF(const std::string & filename, HashPair hp, int nh, uint64_t size = 0);
-
+    SBF(const std::string & filename, BF* copy);
     virtual ~SBF();
 
     virtual void load();
@@ -100,18 +110,21 @@ public:
     virtual void unset_difbit(uint64_t p);
     virtual uint64_t size() const;
     virtual uint64_t similarity(const BF* other, int type) const;
-    virtual uint64_t similarity(const BF* other, sdsl::bit_vector & acc, int type) const;
+    virtual uint64_t similarity(const BF* other, BF* acc, int type) const;
     virtual std::tuple<uint64_t, uint64_t> b_similarity(const BF* other) const;
     virtual BF* union_with(const std::string & new_name, const BF* f2) const;
     virtual void union_into(const BF* f2);
     virtual uint64_t count_ones() const;
+    virtual uint64_t count_ones(int type) const;
     virtual void compress();
 
     // Consider using bit_vectors for both.
     // Would like for both of these to be constant but having problems
     virtual void remove_duplicate(BF* f2);
     virtual void add_different(const sdsl::bit_vector & new_dif);
-    virtual void add_accumulation(sdsl::bit_vector & accum);
+    virtual void add_accumulation(BF* f2);
+    // Finds the elements which were in this->sim and not in f2->sim
+    virtual sdsl::bit_vector* calc_new_dif_bv(const BF* f2);
     // Accessor functions to perform simple and or xor operations on sim or dif filters
     virtual sdsl::bit_vector* calc_sim_bv(const BF* f2, int type);
     virtual sdsl::bit_vector* calc_dif_bv(const BF* f2, int type);
@@ -138,6 +151,7 @@ BF* load_bf_from_file(const std::string & fn, HashPair hp, int nh);
 sdsl::bit_vector* sim_bv_fast(const sdsl::bit_vector & b1, const sdsl::bit_vector& b2);
 // dif == xor
 sdsl::bit_vector* dif_bv_fast(const sdsl::bit_vector & b1, const sdsl::bit_vector& b2);
+sdsl::bit_vector* copy_bv_fast(const sdsl::bit_vector & b1);
 
 std::string split_filename(const std::string & new_name);
 #endif
