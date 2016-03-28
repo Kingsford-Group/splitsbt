@@ -174,13 +174,6 @@ uint64_t SplitBloomTree::similarity(SplitBloomTree* other, int type) const {
     return sim;
 }
 
-uint64_t SplitBloomTree::similarity(SplitBloomTree* other, UncompressedBF* accum, int type) const {
-    protected_cache(true);
-    uint64_t sim = this->bf()->similarity(other->bf(), accum, type);
-    protected_cache(false);
-    return sim;
-}
-
 //Add type to this?
 std::tuple<uint64_t,uint64_t> SplitBloomTree::b_similarity(SplitBloomTree* other) const{
     protected_cache(true);

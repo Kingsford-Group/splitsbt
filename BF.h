@@ -34,7 +34,6 @@ public:
     void add(const jellyfish::mer_dna & m);
 
     virtual uint64_t similarity(const BF* other, int type) const;
-    virtual uint64_t similarity(const BF* other, BF* accum, int type) const;
     virtual std::tuple<uint64_t, uint64_t> b_similarity(const BF* other) const;
     virtual BF* union_with(const std::string & new_name, const BF* f2) const;
     virtual void union_into(const BF* f2);
@@ -49,7 +48,6 @@ public:
     virtual void dif_into(const BF* f2);
 
     // Things which are not used in all cases but were added to save time in interface
-    virtual void add_accumulation(sdsl::bit_vector & accum);
 protected:
     std::string filename;
     sdsl::rrr_vector<255>* bits;
@@ -85,7 +83,6 @@ public:
     virtual BF* dif_with(const std::string & new_name, const BF* f2) const;
     virtual void dif_into(const BF* f2);
 
-    virtual void add_accumulation(BF* f2);
 protected:
     sdsl::bit_vector* bv;
 };
@@ -110,7 +107,6 @@ public:
     virtual void unset_difbit(uint64_t p);
     virtual uint64_t size() const;
     virtual uint64_t similarity(const BF* other, int type) const;
-    virtual uint64_t similarity(const BF* other, BF* acc, int type) const;
     virtual std::tuple<uint64_t, uint64_t> b_similarity(const BF* other) const;
     virtual BF* union_with(const std::string & new_name, const BF* f2) const;
     virtual void union_into(const BF* f2);
@@ -122,7 +118,6 @@ public:
     // Would like for both of these to be constant but having problems
     virtual void remove_duplicate(BF* f2);
     virtual void add_different(const sdsl::bit_vector & new_dif);
-    virtual void add_accumulation(BF* f2);
     // Finds the elements which were in this->sim and not in f2->sim
     virtual sdsl::bit_vector* calc_new_dif_bv(const BF* f2);
     // Accessor functions to perform simple and or xor operations on sim or dif filters

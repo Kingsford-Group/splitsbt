@@ -149,11 +149,6 @@ uint64_t BF::similarity(const BF* other, int type) const {
     return 0;
 }
 
-uint64_t BF::similarity(const BF* other, BF* accum, int type) const {
-    DIE("not yet implemented");
-    return 0;
-}
-
 std::tuple<uint64_t, uint64_t> BF::b_similarity(const BF* other) const {
     DIE("not yet implemented");
     return std::make_tuple(0,0);
@@ -232,10 +227,6 @@ void BF::dif_into(const BF* f2){
     DIE("not yet implemented");
 }
 
-void BF::add_accumulation(sdsl::bit_vector & accum){
-    DIE("not yet implemented");
-}
-
 /*
 Uncompressed Bloom Filter (SBT 1.0 Implementation)
 */
@@ -255,15 +246,11 @@ UncompressedBF::UncompressedBF(const std::string & f, BF* copy) :
     bv(nullptr)
 {
     UncompressedBF* b = dynamic_cast<UncompressedBF*>(copy);
-    SBF* b2 = dynamic_cast<SBF*>(copy);
+    //SBF* b2 = dynamic_cast<SBF*>(copy);
     if (b != nullptr) {
         if (b->bv != nullptr){    
             bv=copy_bv_fast(*b->bv);
         }   
-    } else if(b2 != nullptr) { //This isn't actually copying - its for accumulation!
-        if (b2->sim != nullptr){
-            bv=copy_bv_fast(*b2->sim);    
-        }
     } else{
         DIE("Could not copy BF!");
     }
@@ -497,26 +484,6 @@ void UncompressedBF::dif_into(const BF* f2){
     }
 }
 
-void UncompressedBF::add_accumulation(BF* f2){
-    assert(size() == f2->size());
-
-    SBF* b = dynamic_cast<SBF*>(f2);
-    if (b == nullptr) {
-        DIE("Accumulation is SBF->UncompressedBF");
-    }
-    
-    uint64_t* acc_data = this->bv->data();
-    const uint64_t* b1_sim_data = b->sim->data();
-    //const uint64_t* b1_dif_data = this->dif->data();
-
-    sdsl::bit_vector::size_type len = size()>>6;
-    for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
-        *acc_data = (*acc_data) | (*b1_sim_data++);
-        acc_data++;
-    }
-
-}
-
 /*
 Split Bloom Tree Compressed
 */
@@ -745,74 +712,6 @@ uint64_t SBF::similarity(const BF* other, int type) const {
 	return 0;
 }
 
-uint64_t SBF::similarity(const BF* other, BF* accum, int type) const {
-    assert(other->size() == size());
-    assert(accum->size() = size());
-
-    const uint64_t* b1_sim_data = this->sim->data();
-    const uint64_t* b1_dif_data = this->dif->data();
-
-    UncompressedBF* acc = dynamic_cast<UncompressedBF*>(accum);
-    if (acc == nullptr) {
-        DIE("Accumulation BF must be uncompressedBF.");
-    }
-    const uint64_t* acc_data = acc->bv->data();
-
-    const SBF* o = dynamic_cast<const SBF*>(other);
-    if (o == nullptr) {
-        DIE("Can only compute similarity on same type of BF.");
-    }
-
-    const uint64_t* b2_sim_data = o->sim->data();
-    const uint64_t* b2_dif_data = o->dif->data();
-
-    if (type == 1) {
-		uint64_t xor_count = 0;
-	   	uint64_t or_count = 0;
-    
-		sdsl::bit_vector::size_type len = size()>>6;
-		for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
-        		xor_count += __builtin_popcountl( ((*b1_sim_data) ^ (*b2_sim_data)) | ((*b1_dif_data) ^ (*b2_dif_data)) );
-	        	or_count += __builtin_popcountl( ((*b1_sim_data) | (*b2_sim_data)) | ((*b1_dif_data) | (*b2_dif_data)) );
-                b1_sim_data++;
-                b1_dif_data++;
-                b2_sim_data++;
-                b2_dif_data++;
-			//count += __builtin_popcountl((*b1_data++) ^ (*b2_data++));
-  	  	}
-   
-    	return uint64_t(float(or_count - xor_count) / float(or_count) * size() );
-	}
-	else if (type == -1) { // XXX: This is primed to be deleted but placeholder for now
-		uint64_t count = 0;
-		sdsl::bit_vector::size_type len = size()>>6;
-                for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
-                       count += __builtin_popcountl( ((*b1_sim_data) ^ (*b2_sim_data)) | ((*b1_dif_data) ^ (*b2_dif_data)) );
-                        b1_sim_data++;
-                        b1_dif_data++;
-                        b2_sim_data++;
-                        b2_dif_data++;
- 
-                }
-		return size() - count;
-	} else if (type == 0) {
- 		uint64_t count = 0;
-		sdsl::bit_vector::size_type len = size()>>6;
-        for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
-            count += __builtin_popcountl( ((*b1_sim_data) | (*b1_dif_data) | (*acc_data)) ^ ((*b2_sim_data) | (*b2_dif_data)));
-            b1_sim_data++;
-            b1_dif_data++;
-            b2_sim_data++;
-            b2_dif_data++;
-            acc_data++;
-        } 
-        return size()-count;
-    }
-	
-	DIE("ERROR: ONLY TWO TYPES IMPLEMENTED");
-	return 0;
-}
-
 std::tuple<uint64_t, uint64_t> SBF::b_similarity(const BF* other) const {
     DIE("b_similarity has two bit vectors now. This method is not used");
     return std::make_tuple(0,0);
@@ -941,10 +840,6 @@ void SBF::add_different(const sdsl::bit_vector & new_dif){
     this->sim = temp;
 } 
 
-void SBF::add_accumulation(BF* f2){
-    DIE("Accumulation isn't a SBF (right now)");
-}
-
 // Calculates what was removed [from this node] by the 'and' operation of sim vectors.
 // XXX: This is also super inefficient because we do the same calculation in union_into
 // but we can't edit the vector in this stage of the process
@@ -963,24 +858,6 @@ sdsl::bit_vector* SBF::calc_new_dif_bv(const BF* f2){
     }
     return new_dif;
 }
-
-//Basically a reverse accessor method that saves the union of two bit vectors
-//to the bit vector being added in
-
-/*
-void SBF::add_accumulation(sdsl::bit_vector & accum){
-    assert(size() == accum.size());
-    
-    uint64_t* acc_data = accum.data();
-    const uint64_t* b1_sim_data = this->sim->data();
-    //const uint64_t* b1_dif_data = this->dif->data();
-
-    sdsl::bit_vector::size_type len = size()>>6;
-    for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
-        *acc_data = (*acc_data++) | (*b1_sim_data++) ;
-    }
-}
-*/
 
 // The sim vector is the intersection of sim vectors
 // The difference vector is union of dif filters and new differences;
