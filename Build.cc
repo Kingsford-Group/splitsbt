@@ -308,7 +308,7 @@ BloomTree* insert_bloom_tree(BloomTree* T, BloomTree* N, int type) {
 
     while (T != nullptr) {
         std::cerr << "At node: " << T->name() << std::endl;
-        T->increment_usage();
+        //T->increment_usage();
         if (T->num_children() == 0) {
             // this is the tricky case: T is currently a leaf, which means it
             // represents an SRA file, and so it has to stay a leaf. So what we
@@ -394,11 +394,13 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
     int depth = 0;
     int best_child = -1;
     SplitBloomTree* parent = nullptr;
-    std::cerr << "Num #1s (Curr): " << root->bf()->count_ones(0) << std::endl; 
-
+    //std::cerr << "Num #1s (Curr): " << root->bf()->count_ones(0) << std::endl; 
+    N->set_usage(1);
     while (T != nullptr) {
         std::cerr << "At node: " << T->name() << std::endl;
-        T->increment_usage();
+        //set_usage protected = 1
+        //set_usage unprotected = 0
+        T->set_usage(1);//increment_usage();
         if (T->num_children() == 0) {
             // this is the tricky case: T is currently a leaf, which means it
             // represents an SRA file, and so it has to stay a leaf. So what we
@@ -414,6 +416,10 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
             SplitBloomTree* NewNode = T->union_bloom_filters(oss.str(), N);
             std::cerr << "   1:" << NewNode->child(0)->name() << std::endl;
             std::cerr << "   2:" << NewNode->child(1)->name() << std::endl;
+
+            // Current nodes no longer protected
+            T->set_usage(0);
+            N->set_usage(0);
 
             if (parent == nullptr) {
                 return NewNode;
@@ -442,21 +448,21 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
             DIE("Something is wrong!");
         } else {
             // union the new filter with this node
-            std::cerr << "Num 1s (N Pre-Union Sim): " << N->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (N Pre-Union Sim): " << N->bf()->count_ones(0) << std::endl;
             //std::cerr << "Num 1s (N Pre-Union Dif): " << N->bf()->count_ones(1) << std::endl;
-            std::cerr << "Num 1s (Left Child Sim): " << T->child(0)->bf()->count_ones(0) << std::endl;
-            std::cerr << "Num 1s (Right Child Sim): " << T->child(1)->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (Left Child Sim): " << T->child(0)->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (Right Child Sim): " << T->child(1)->bf()->count_ones(0) << std::endl;
             T->union_into(N);
-            std::cerr << "Num 1s (N Post-Union Sim): " << N->bf()->count_ones(0) << std::endl;
-            std::cerr << "Num 1s (Left Child Sim): " << T->child(0)->bf()->count_ones(0) << std::endl;
-            std::cerr << "Num 1s (Right Child Sim): " << T->child(1)->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (N Post-Union Sim): " << N->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (Left Child Sim): " << T->child(0)->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (Right Child Sim): " << T->child(1)->bf()->count_ones(0) << std::endl;
           
             // find the most similar child and move to it
             uint64_t best_sim = 0;
             best_child = -1;
             for (int i = 0; i < 2; i++) {
-                T->child(i)->increment_usage();
-                std::cerr << "Child " << i << " number of ones = " << T->child(i)->bf()->count_ones(0) << std::endl;
+                T->child(i)->set_usage(1);//increment_usage();
+                //std::cerr << "Child " << i << " number of ones = " << T->child(i)->bf()->count_ones(0) << std::endl;
                 uint64_t sim = T->child(i)->similarity(N,type);
                 std::cerr << "Child " << i << " sim =" << sim << std::endl;
                 if (sim >= best_sim) {
@@ -464,13 +470,26 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
                     best_child = i;
                 }
             }
-            
+           
+            //Unprotect other children
+            for (int i=0; i < 2; i++) {
+                if (i != best_child){
+                    T->child(i)->set_usage(0);
+                }
+            }
+
             // move the current ptr to the most similar child
             std::cerr << "Moving to " << ((best_child==0)?"left":"right") 
                 << " child: " << best_child << " " << best_sim << std::endl;
             //std::cerr << "Heap size " << T->cache_size() << std::endl; 
             parent = T;
-            T = T->child(best_child);
+            // We no longer need to keep parent loaded
+            T->set_usage(0); 
+            BloomTree* Temp = T->child(best_child);
+            T = dynamic_cast<SplitBloomTree*>(Temp);
+            if (T == nullptr){
+                DIE("Child of SplitBloomTree not SplitBloomTree!");
+            }
         }
         depth++;
     }

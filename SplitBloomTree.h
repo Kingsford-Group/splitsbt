@@ -9,49 +9,25 @@
 // this is the max number of BF allowed in memory at once.
 extern int BF_INMEM_LIMIT;
 
-class SplitBloomTree {
+class SplitBloomTree : public BloomTree {
 public:
     SplitBloomTree(const std::string & f, HashPair hp, int nh);
-    ~SplitBloomTree();
-    std::string name() const;
+    virtual ~SplitBloomTree();
 
-    SplitBloomTree* child(int which) const;
-    void set_child(int which, SplitBloomTree* c);
-    int num_children() const;
-    void set_parent(const SplitBloomTree* p);
-    const SplitBloomTree* get_parent() const;
-    uint64_t similarity(SplitBloomTree* other, int type) const;
-    uint64_t similarity(SplitBloomTree* other, UncompressedBF* accum, int type) const;
-    std::tuple<uint64_t, uint64_t> b_similarity(SplitBloomTree* other) const;
-    BF* bf() const;
+    virtual SplitBloomTree* union_bloom_filters(const std::string & new_name, SplitBloomTree* f2);
+    virtual void union_into(const SplitBloomTree* other);
 
-    SplitBloomTree* union_bloom_filters(const std::string & new_name, SplitBloomTree* f2);
-    void union_into(const SplitBloomTree* other);
+    //virtual int usage() const;
+    //virtual void increment_usage() const;
+    //virtual void set_usage(int val) const;
+    //virtual int cache_size();
+    //virtual void set_heap_ref(Heap<const SplitBloomTree>::heap_reference* hr);
+    //virtual Heap<const SplitBloomTree>::heap_reference* get_heap_ref();
+    //static void protected_cache(bool b);
 
-    int usage() const;
-    void increment_usage() const;
-    int cache_size();
-    void set_heap_ref(Heap<const SplitBloomTree>::heap_reference* hr);
-    Heap<const SplitBloomTree>::heap_reference* get_heap_ref();
-    static void protected_cache(bool b);
-
-private:
+protected:
     bool load() const;
     void unload() const;
-
-    static Heap<const SplitBloomTree> bf_cache;
-    static void drain_cache();
-
-    std::string filename;
-    HashPair hashes;
-    int num_hash;
-    mutable BF* bloom_filter;
-    mutable Heap<const SplitBloomTree>::heap_reference* heap_ref;
-
-    SplitBloomTree* children[2];
-    SplitBloomTree* parent;
-    mutable int usage_count;
-    mutable bool dirty;
 };
 
 
@@ -92,7 +68,9 @@ private:
     mutable bool dirty;
 }
 */
+/*
 SplitBloomTree* read_split_bloom_tree(const std::string & filename, bool read_hashes=true);
 void write_bloom_tree(const std::string & outfile, SplitBloomTree* root, const std::string & matrix_file);
 void write_compressed_bloom_tree(const std::string & outfile, SplitBloomTree* root, const std::string & matrix_file);
+*/
 #endif

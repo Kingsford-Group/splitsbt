@@ -31,6 +31,9 @@ public:
     virtual bool contains(const jellyfish::mer_dna & m) const;
     bool contains(const std::string & str) const;
 
+    virtual bool contains(const jellyfish::mer_dna & m, int type) const;
+    bool contains(const std::string & str, int type) const;
+
     void add(const jellyfish::mer_dna & m);
 
     virtual uint64_t similarity(const BF* other, int type) const;
@@ -96,6 +99,9 @@ public:
 
     virtual void load();
     virtual void save();
+
+    virtual bool contains(const jellyfish::mer_dna & m, int type) const;
+    bool contains(const std::string & str, int type) const;
 
     virtual std::string get_sim_name();
     virtual std::string get_dif_name();

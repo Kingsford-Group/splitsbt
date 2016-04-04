@@ -9,7 +9,7 @@
 #include <cassert>
 #include <jellyfish/file_header.hpp>
 
-Heap<const SplitBloomTree> SplitBloomTree::bf_cache;
+//Heap<const SplitBloomTree> SplitBloomTree::bf_cache;
 
 // construct a bloom filter with the given filter backing.
 SplitBloomTree::SplitBloomTree(
@@ -17,75 +17,23 @@ SplitBloomTree::SplitBloomTree(
     HashPair hp,
     int nh
 ) :
-    filename(f),
-    hashes(hp),
-    num_hash(nh),
-    bloom_filter(0),
-    heap_ref(nullptr),
-    parent(0),
-    usage_count(0),
-    dirty(false)
+    BloomTree(f, hp, nh)
+    //filename(f),
+    //hashes(hp),
+    //num_hash(nh),
+    //bloom_filter(0),
+    //heap_ref(nullptr),
+    //parent(0),
+    //usage_count(0),
+    //dirty(false)
 {
-    children[0] = nullptr;
-    children[1] = nullptr;
+    //children[0] = nullptr;
+    //children[1] = nullptr;
 }
 
 // free the memory for this node.
 SplitBloomTree::~SplitBloomTree() {
     unload();
-}
-
-std::string SplitBloomTree::name() const {
-    return filename;
-}
-
-// Return the node for the given child
-SplitBloomTree* SplitBloomTree::child(int which) const { 
-    assert(which >= 0 || which < 2);
-    return children[which]; 
-}
-
-// Set the given child
-void SplitBloomTree::set_child(int which, SplitBloomTree* c) {
-    assert(which >= 0 || which < 2);
-    c->parent = this;
-    children[which] = c;
-    //if (c->get_heap_ref()==nullptr){
-    //    c->set_heap_ref(bf_cache.insert(c, usage()));
-    //}
-}
-
-int SplitBloomTree::num_children() const {
-    return ((children[0]==nullptr)?0:1) + ((children[1]==nullptr)?0:1);
-}
-
-const SplitBloomTree* SplitBloomTree::get_parent() const {
-    return this->parent;
-}
-
-void SplitBloomTree::set_parent(const SplitBloomTree* p) {
-    parent = const_cast<SplitBloomTree*>(p);
-}
-
-// return the bloom filter, loading first if necessary
-BF* SplitBloomTree::bf() const {
-    load();
-    return bloom_filter;
-}
-
-// return the number of times this bloom filter has been used.
-int SplitBloomTree::usage() const {
-    return usage_count;
-}
-
-// increment the usage counter, and update the filter's location in
-// the heap if needed.
-void SplitBloomTree::increment_usage() const {
-    usage_count++;
-    // if we're in the cache, let the cache know we've been used.
-    if (heap_ref != nullptr) {
-        bf_cache.increase_key(heap_ref, usage_count);
-    }
 }
 
 // Frees the memory associated with the bloom filter
@@ -103,38 +51,6 @@ void SplitBloomTree::unload() const {
         bloom_filter = nullptr; 
     }
     dirty = false;
-}
-
-void SplitBloomTree::drain_cache() {
-    // if the cache is too big
-    while (bf_cache.size() >= BF_INMEM_LIMIT && !bf_cache.is_protected()) {
-        // toss the bloom filter with the lowest usage
-        const SplitBloomTree* loser = bf_cache.pop();
-        loser->heap_ref = nullptr;
-
-        //std::cerr << "Unloading BF: " << loser->filename   
-        //          << " cache size = " << bf_cache.size() << std::endl;
-        loser->unload();
-    }
-}
-
-void SplitBloomTree::protected_cache(bool b) {
-    bf_cache.set_protected(b);
-    if (!b) {
-        SplitBloomTree::drain_cache();
-    }
-}
-
-int SplitBloomTree::cache_size() {
-    return bf_cache.size();
-}
-
-void SplitBloomTree::set_heap_ref(Heap<const SplitBloomTree>::heap_reference* hr) {
-    heap_ref = hr;
-}
-
-Heap<const SplitBloomTree>::heap_reference* SplitBloomTree::get_heap_ref() {
-    return heap_ref;
 }
 
 // Loads the bloom filtering into memory
@@ -166,25 +82,6 @@ bool SplitBloomTree::load() const {
     return true;
 }
 
-
-uint64_t SplitBloomTree::similarity(SplitBloomTree* other, int type) const {
-    protected_cache(true);
-    uint64_t sim = this->bf()->similarity(other->bf(), type);
-    protected_cache(false);
-    return sim;
-}
-
-//Add type to this?
-std::tuple<uint64_t,uint64_t> SplitBloomTree::b_similarity(SplitBloomTree* other) const{
-    protected_cache(true);
-    std::cerr << "Before \n";
-    std::tuple<uint64_t, uint64_t> sim = this->bf()->b_similarity(other->bf());
-    protected_cache(false);
-    std::cerr << "After \n";
-    return sim;
-}
-
-
 // Create a new node that is the union of the bloom filters
 // in two other nodes;
 // These nodes were not previously linked and thus we dont have any 'new differences' to add back in
@@ -207,23 +104,23 @@ SplitBloomTree* SplitBloomTree::union_bloom_filters(const std::string & new_name
     // We first union the two key nodes and save it as a new node.
     //protected_cache(true);
     bt->bloom_filter = my_bf->union_with(new_name, other_bf); 
-    std::cerr << "Num 1s (New Filter Sim): " << bt->bf()->count_ones(0) << std::endl;
-    std::cerr << "Num 1s (New Filter Dif): " << bt->bf()->count_ones(1) << std::endl;
-    std::cerr << "Num 1s (Left Node Sim): " << my_bf->count_ones(0) << std::endl;
-    std::cerr << "Num 1s (Left Node Dif): " << my_bf->count_ones(1) << std::endl;
-    std::cerr << "Num 1s (Right Node Sim): " << other_bf->count_ones(0) << std::endl;
-    std::cerr << "Num 1s (Right Node Dif): " << other_bf->count_ones(1) << std::endl;
+    //std::cerr << "Num 1s (New Filter Sim): " << bt->bf()->count_ones(0) << std::endl;
+    //std::cerr << "Num 1s (New Filter Dif): " << bt->bf()->count_ones(1) << std::endl;
+    //std::cerr << "Num 1s (Left Node Sim): " << my_bf->count_ones(0) << std::endl;
+    //std::cerr << "Num 1s (Left Node Dif): " << my_bf->count_ones(1) << std::endl;
+    //std::cerr << "Num 1s (Right Node Sim): " << other_bf->count_ones(0) << std::endl;
+    //std::cerr << "Num 1s (Right Node Dif): " << other_bf->count_ones(1) << std::endl;
     bt->set_child(0, this);
     bt->set_child(1, f2);
 
     //Here we remove elements from the union's sim from each child's sim
     my_bf->remove_duplicate(bt->bf());
     other_bf->remove_duplicate(bt->bf());
-    std::cerr << "AFTER REMOVING DUPLICATES " << std::endl;    
-    std::cerr << "Num 1s (Left Node Sim): " << my_bf->count_ones(0) << std::endl;
-    std::cerr << "Num 1s (Left Node Dif): " << my_bf->count_ones(1) << std::endl;
-    std::cerr << "Num 1s (Right Node Sim): " << other_bf->count_ones(0) << std::endl;
-    std::cerr << "Num 1s (Right Node Dif): " << other_bf->count_ones(1) << std::endl;
+    //std::cerr << "AFTER REMOVING DUPLICATES " << std::endl;    
+    //std::cerr << "Num 1s (Left Node Sim): " << my_bf->count_ones(0) << std::endl;
+    //std::cerr << "Num 1s (Left Node Dif): " << my_bf->count_ones(1) << std::endl;
+    //std::cerr << "Num 1s (Right Node Sim): " << other_bf->count_ones(0) << std::endl;
+    //std::cerr << "Num 1s (Right Node Dif): " << other_bf->count_ones(1) << std::endl;
 
     this->dirty = true;
     f2->dirty = true;
@@ -274,7 +171,7 @@ void SplitBloomTree::union_into(const SplitBloomTree* other) {
             DIE("child bf() should be SBF.");
         }
         cbf0->add_different(*new_dif);
-        child(0)->dirty = true;
+        child(0)->set_dirty(true);
     }
     if (child(1) != nullptr){
         SBF* cbf1 = dynamic_cast<SBF*>(child(1)->bf());
@@ -282,7 +179,7 @@ void SplitBloomTree::union_into(const SplitBloomTree* other) {
             DIE("child bf() should be SBF.");
         }
         cbf1->add_different(*new_dif);
-        child(1)->dirty = true;
+        child(1)->set_dirty(true);
     }
     std::cerr << "Cache size (end): " << cache_size() << std::endl; 
     protected_cache(false);
@@ -290,22 +187,6 @@ void SplitBloomTree::union_into(const SplitBloomTree* other) {
     delete new_dif;
 
 }
-
-/*
-BloomTree* create_union_node(BloomTree* T, BloomTree* N) {
-    assert(T != nullptr && N != nullptr);
-    assert(T->hashes == N->hashes);
-    assert(T->num_hashes == N->num_hashes);
-
-    std::string new_name = "union";
-
-    BloomTree* unionNode = new BloomTree(new_name, T->hashes, T->num_hash);
-    unionNode->bloom_filter = T->bloom_filter->union_with(new_name, N->bloom_filter);
-    unionNode->set_child(0, T);
-    unionNode->set_child(1, N);
-    return unionNode;
-}
-*/
 
 /* read a file that defines the bloom tree structure. The
    file has lines of the form:
@@ -321,6 +202,7 @@ BloomTree* create_union_node(BloomTree* T, BloomTree* N) {
    This function will return a pointer to the root of the
    constructed bloom tree.
 */
+/*
 SplitBloomTree* read_split_bloom_tree(const std::string & filename, bool read_hashes) {
     std::ifstream in(filename.c_str());
 
@@ -439,6 +321,6 @@ void write_compressed_bloom_tree(
     write_compressed_bloom_tree_helper(out, root);
     std::cerr << "Done." << std::endl;
 }
-
+*/
 
 

@@ -8,38 +8,45 @@
 #include <iostream>
 
 #include "BloomTree.h"
+#include "SplitBloomTree.h"
 
 extern float QUERY_THRESHOLD;
 
 struct QueryInfo {
-    QueryInfo(const std::string & q) : query(q), query_kmers(kmers_in_string(q)) {}
-    QueryInfo(const std::string & q, const std::string & w){
-	query = q;
-	query_kmers = kmers_in_string(q);
-	std::vector<std::string> fields;
-	SplitString(w, ' ', fields);
-	unsigned n = 0;
-	for (const auto & w : fields){
-		if (w!="") {
-			// If string w has invalid letters after numbers, composite_string will return pointer (else null)
-			// std::string::size_type not working here?
-			std::size_t composite_string;
-			//std::cerr << typeid(w).name() << std::endl;
-			try{
-				float value = std::stof(w, &composite_string);
-	                        if (composite_string != w.size()) {
-	                                std::cerr << "Invalid weight \'" << w << "\' at position " << n << std::endl;
-        	                        exit(3);
-                        	}
-	                        weight.emplace_back(value); //Currently zero error handling here!
+    QueryInfo(const std::string & q) : 
+    query(q), 
+    query_kmers(kmers_in_string(q)),
+    total_kmers(query_kmers.size()),
+    matched_kmers(0)  {}
 
-			}
-			catch(...){
-				std::cerr << "Invalid weight \'" << w << "\' at position " << n << std::endl;
-				exit(3);
-			}
-		}
-		n++;
+    QueryInfo(const std::string & q, const std::string & w){
+	    query = q;
+    	query_kmers = kmers_in_string(q);
+        total_kmers = query_kmers.size();
+        matched_kmers = 0; 
+	    std::vector<std::string> fields;
+    	SplitString(w, ' ', fields);
+    	unsigned n = 0;
+	    for (const auto & w : fields){
+		    if (w!="") {
+			    // If string w has invalid letters after numbers, composite_string will return pointer (else null)
+    			// std::string::size_type not working here?
+	    		std::size_t composite_string;
+		    	//std::cerr << typeid(w).name() << std::endl;
+			    try{
+				    float value = std::stof(w, &composite_string);
+	                if (composite_string != w.size()) {
+                        std::cerr << "Invalid weight \'" << w << "\' at position " << n << std::endl;
+        	            exit(3);
+                    }
+	                weight.emplace_back(value); //Currently zero error handling here!
+		    	}
+			    catch(...){
+				    std::cerr << "Invalid weight \'" << w << "\' at position " << n << std::endl;
+    				exit(3);
+	    		}
+	    	}
+	    	n++;
     	}
     }
     ~QueryInfo() {}
@@ -48,6 +55,8 @@ struct QueryInfo {
     std::set<jellyfish::mer_dna> query_kmers;
     std::vector<const BloomTree*> matching;
     std::vector<float> weight;
+    int total_kmers;
+    int matched_kmers;
 };
 
 using QuerySet = std::list<QueryInfo*>;

@@ -9,7 +9,7 @@
 #include <jellyfish/file_header.hpp>
 
 Heap<const BloomTree> BloomTree::bf_cache;
-int BF_INMEM_LIMIT = 300;
+int BF_INMEM_LIMIT = 10;
 
 // construct a bloom filter with the given filter backing.
 BloomTree::BloomTree(
@@ -83,6 +83,22 @@ void BloomTree::increment_usage() const {
     if (heap_ref != nullptr) {
         bf_cache.increase_key(heap_ref, usage_count);
     }
+}
+
+void BloomTree::set_usage(int val) const{
+    usage_count=val;
+    // if we're in the cache, let the cache know its new usage_count is val
+    if (heap_ref != nullptr){
+        bf_cache.increase_key(heap_ref, usage_count);
+    }
+}
+
+int BloomTree::cache_size() const{
+    return bf_cache.size();
+}
+
+void BloomTree::set_dirty(bool b) const{
+    dirty = b;
 }
 
 // Frees the memory associated with the bloom filter

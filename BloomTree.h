@@ -12,26 +12,29 @@ extern int BF_INMEM_LIMIT;
 class BloomTree {
 public:
     BloomTree(const std::string & f, HashPair hp, int nh);
-    ~BloomTree();
-    std::string name() const;
+    virtual ~BloomTree();
+    virtual std::string name() const;
 
-    BloomTree* child(int which) const;
-    void set_child(int which, BloomTree* c);
-    int num_children() const;
-    void set_parent(const BloomTree* p);
-    const BloomTree* get_parent() const;
-    uint64_t similarity(BloomTree* other, int type) const;
-    std::tuple<uint64_t, uint64_t> b_similarity(BloomTree* other) const;
-    BF* bf() const;
+    virtual BloomTree* child(int which) const;
+    virtual void set_child(int which, BloomTree* c);
+    virtual int num_children() const;
+    virtual void set_parent(const BloomTree* p);
+    virtual const BloomTree* get_parent() const;
+    virtual uint64_t similarity(BloomTree* other, int type) const;
+    virtual std::tuple<uint64_t, uint64_t> b_similarity(BloomTree* other) const;
+    virtual BF* bf() const;
 
-    BloomTree* union_bloom_filters(const std::string & new_name, BloomTree* f2);
-    void union_into(const BloomTree* other);
+    virtual BloomTree* union_bloom_filters(const std::string & new_name, BloomTree* f2);
+    virtual void union_into(const BloomTree* other);
 
-    int usage() const;
-    void increment_usage() const;
+    virtual int usage() const;
+    virtual void increment_usage() const;
+    virtual void set_usage(int val) const;
+    virtual int cache_size() const;
+    virtual void set_dirty(bool b) const;
     static void protected_cache(bool b);
 
-private:
+protected:
     bool load() const;
     void unload() const;
 

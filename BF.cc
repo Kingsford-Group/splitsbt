@@ -87,6 +87,16 @@ bool BF::contains(const std::string & str) const {
     return contains(jellyfish::mer_dna(str));
 }
 
+bool BF::contains(const jellyfish::mer_dna & m, int type) const{
+    DIE("No type in standard BF");
+    return false;
+}
+
+bool BF::contains(const std::string & str, int type) const {
+    DIE("No type in standard BF");
+    return false;
+}
+
 uint64_t BF::size() const {
     return bits->size();
 }
@@ -940,7 +950,6 @@ void SBF::dif_into(const BF* f2){
 
 // returns true iff the bloom filter contains the given kmer
 // zero looks at sim, one looks at dif
-/*
 bool SBF::contains(const jellyfish::mer_dna & m, int type) const {
     //std::cout << "TESTING STUFF: " << m.to_str() << std::endl;
     std::string temp = m.to_str();
@@ -975,7 +984,6 @@ bool SBF::contains(const jellyfish::mer_dna & m, int type) const {
 bool SBF::contains(const std::string & str, int type) const {
     return contains(jellyfish::mer_dna(str), type);
 }
-*/
 
 /*
 Misc Code elements
