@@ -116,26 +116,6 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
     return (c >= QUERY_THRESHOLD * q->query_kmers.size());
 }
 
-// return true if the filter at this node contains > QUERY_THRESHOLD kmers
-// Ignore weighted stuff for now
-bool query_passes(SplitBloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::mer_dna> & q) {
-    float weight = 1.0;
-    assert(q.size() > 0);
-    auto bf = root->bf();
-    float c = 0;
-    unsigned n = 0;
-
-    for (const auto & m : q->query_kmers) {
-        //DEBUG: std::cout << "checking: " << m.to_str();
-        if (bf->contains(m,0)){
-            c+=weight;
-            q->matched_kmers +=weight;
-        }
-	    n++;
-        //DEBUG: std::cout << c << std::endl;
-    }
-    return (c+q->matched_kmers >= QUERY_THRESHOLD * q->total_kmers);
-}
 // recursively walk down the tree, proceeding to children only
 // if their parent passes the query threshold; 
 void query(
@@ -216,57 +196,50 @@ void print_query_results(const QuerySet & qs, std::ostream & out) {
 
 
 void query_batch(BloomTree* root, QuerySet & qs) {
-    // how many children do we have?
-    bool has_children = root->child(0) || root->child(1);
+    SBF* sroot = dynamic_cast<SBF*>(root);
+    if (sroot == nullptr) { //the standard query_batch.
+        // how many children do we have?
+        bool has_children = root->child(0) || root->child(1);
 
-    // construct the set of queries that pass this node
-    QuerySet pass;
-    unsigned n = 0;
-    for (auto & q : qs) {
-        if (query_passes(root, q)) { //q->query_kmers)) {
-            if (has_children) {
-                pass.emplace_back(q);
-            } else {
-                q->matching.emplace_back(root);
-                n++;
-            }
-        } 
-    }
-
-    // $(node name) $(internal / leaf) $(number of matches)
-    if (has_children) { //Changing format
-        std::cout << root->name() << " internal " << pass.size() << std::endl;
-    } else {
-        std::cout << root->name() << " leaf " << n << std::endl;
-    }
-
-    if (pass.size() > 0) {
-        // if present, recurse into left child
-        if (root->child(0)) {
-            query_batch(root->child(0), pass);
+        // construct the set of queries that pass this node
+        QuerySet pass;
+        unsigned n = 0;
+        for (auto & q : qs) {
+            if (query_passes(root, q)) { //q->query_kmers)) {
+                if (has_children) {
+                    pass.emplace_back(q);
+                } else {
+                    q->matching.emplace_back(root);
+                    n++;
+                }
+            } 
         }
 
-        // if present, recurse into right child
-        if (root->child(1)) {
-            query_batch(root->child(1), pass);
+        // $(node name) $(internal / leaf) $(number of matches)
+        if (has_children) { //Changing format
+            std::cout << root->name() << " internal " << pass.size() << std::endl;
+        } else {
+            std::cout << root->name() << " leaf " << n << std::endl;
         }
-    }
-}
 
-void query_batch(SplitBloomTree* root, QuerySet & qs) {
-    bool has_children = root->child(0) || root->child(1);
-
-    QuerySet pass;
-    unsigned n = 0;
-    for (auto & q : qs){
-        if (query_passes(root, q)) { //q->query_kmers)) {
-            if (has_children) {
-                pass.emplace_back(q);
-            } else {
-                q->matching.emplace_back(root);
-                n++;
+        if (pass.size() > 0) {
+            // if present, recurse into left child
+            if (root->child(0)) {
+                query_batch(root->child(0), pass);
             }
-        } 
+
+            // if present, recurse into right child
+            if (root->child(1)) {
+                query_batch(root->child(1), pass);
+            }
+        }
+    } else { //Right now we have two general query types.
+        bool has_children = root->child(0) || root->child(1);
+
+        QuerySet pass;
+        unsigned n = 0;
+        std::cerr << "Placeholder!" << std::endl;
+        
     }
 } 
 
