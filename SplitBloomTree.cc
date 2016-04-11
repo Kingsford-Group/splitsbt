@@ -202,7 +202,6 @@ void SplitBloomTree::union_into(const SplitBloomTree* other) {
    This function will return a pointer to the root of the
    constructed bloom tree.
 */
-/*
 SplitBloomTree* read_split_bloom_tree(const std::string & filename, bool read_hashes) {
     std::ifstream in(filename.c_str());
 
@@ -272,6 +271,7 @@ SplitBloomTree* read_split_bloom_tree(const std::string & filename, bool read_ha
     return tree_root;
 }
 
+/*
 void write_bloom_tree_helper(std::ostream & out, SplitBloomTree* root, int level=1) {
     std::string lstr(level, '*');
 
@@ -322,5 +322,3 @@ void write_compressed_bloom_tree(
     std::cerr << "Done." << std::endl;
 }
 */
-
-

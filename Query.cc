@@ -196,9 +196,12 @@ void print_query_results(const QuerySet & qs, std::ostream & out) {
 
 
 void query_batch(BloomTree* root, QuerySet & qs) {
-    SBF* sroot = dynamic_cast<SBF*>(root);
+    std::cerr << "Batch Query!" << std::endl;
+
+    SplitBloomTree* sroot = dynamic_cast<SplitBloomTree*>(root);
     if (sroot == nullptr) { //the standard query_batch.
         // how many children do we have?
+        std::cerr << "Old Bloom Tree" << std::endl;
         bool has_children = root->child(0) || root->child(1);
 
         // construct the set of queries that pass this node

@@ -68,8 +68,9 @@ private:
     mutable bool dirty;
 }
 */
-/*
+
 SplitBloomTree* read_split_bloom_tree(const std::string & filename, bool read_hashes=true);
+/*
 void write_bloom_tree(const std::string & outfile, SplitBloomTree* root, const std::string & matrix_file);
 void write_compressed_bloom_tree(const std::string & outfile, SplitBloomTree* root, const std::string & matrix_file);
 */

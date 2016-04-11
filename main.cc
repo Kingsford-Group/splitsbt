@@ -201,7 +201,7 @@ int main(int argc, char* argv[]) {
     if (command == "query") {
         std::cerr << "Loading bloom tree topology: " << bloom_tree_file 
             << std::endl;
-        BloomTree* root = read_bloom_tree(bloom_tree_file);
+        SplitBloomTree* root = read_split_bloom_tree(bloom_tree_file);
 
         std::cerr << "In memory limit = " << BF_INMEM_LIMIT << std::endl;
 
