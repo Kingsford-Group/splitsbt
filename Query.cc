@@ -96,8 +96,12 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
     float c = 0;
     unsigned n = 0;
     bool weighted = 0;
+
+    SplitBloomTree* sroot = dynamic_cast<SplitBloomTree*>(root);
+    if (sroot == nullptr) { // start of normal query
+
     if (q->weight.empty()){
-	weighted=0;
+	    weighted=0;
     } else { weighted = 1; }
     for (const auto & m : q->query_kmers) {
         //DEBUG: std::cout << "checking: " << m.to_str();
@@ -113,7 +117,25 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
 	n++;
         //DEBUG: std::cout << c << std::endl;
     }
-    return (c >= QUERY_THRESHOLD * q->query_kmers.size());
+
+    } else {// end of normal
+        for (const auto & m : q->query_kmers) {
+
+            // We can break whenever the total matched is above threshold.
+            //if (q->matched_kmers >= QUERY_THRESHOLD * q->total_kmers){
+            //    return true;
+            //}
+            if (bf->contains(m,0)) { //kmer found in similarity filter
+                q->matched_kmers+=weight; //record the hit (weighted for future weighted functionality)
+                q->query_kmers.erase(m); //we no longer need to store kmer.
+                c+=weight;
+            } else if (bf->contains(m,1)) { //kmer found in difference filter
+                c+=weight; //treat it like regular SBT query.
+            }
+            
+        }
+    }
+    return (c >= QUERY_THRESHOLD * q->total_kmers);
 }
 
 // recursively walk down the tree, proceeding to children only
@@ -237,12 +259,53 @@ void query_batch(BloomTree* root, QuerySet & qs) {
             }
         }
     } else { //Right now we have two general query types.
-        bool has_children = root->child(0) || root->child(1);
-
         QuerySet pass;
         unsigned n = 0;
-        std::cerr << "Placeholder!" << std::endl;
-        
+        std::cerr << "Split Bloom Tree" << std::endl;
+        bool has_children = root->child(0) || root->child(1);
+
+        for (auto & q : qs) {
+            //If query has enough matched kmers (from sim), don't waste time searching
+            if (q->matched_kmers >= QUERY_THRESHOLD * q->total_kmers){
+                //std::cerr << "Skipped search (enough similar kmers already found)" << std::endl;
+                if (has_children) {
+                    pass.emplace_back(q);
+                } else {
+                    q->matching.emplace_back(root);
+                    n++;
+                }
+            } else if (query_passes(root, q)) { //q->query_kmers)) {
+                if (has_children) {
+                    pass.emplace_back(q);
+                } else {
+                    q->matching.emplace_back(root);
+                    n++;
+                }
+            }
+        }
+
+        // $(node name) $(internal / leaf) $(number of matches)
+        if (has_children) { //Changing format
+            std::cout << root->name() << " internal " << pass.size() << std::endl;
+        } else {
+            std::cout << root->name() << " leaf " << n << std::endl;
+        }
+
+        if (pass.size() > 0) {
+            // if present, recurse into left child
+            if (root->child(0)) {
+                query_batch(root->child(0), pass);
+            }
+
+            // if present, recurse into right child
+            if (root->child(1)) {
+                query_batch(root->child(1), pass);
+            }
+        }
+
+
+        // Query passes tracks number of hits. If hits exceeds threshold
+        // Everything below current node passes.  
     }
 } 
 

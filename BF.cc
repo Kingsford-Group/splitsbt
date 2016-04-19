@@ -238,6 +238,109 @@ void BF::dif_into(const BF* f2){
 }
 
 /*
+compressed Split Bloom Filter
+*/
+/*============================================*/
+compressedSBF::compressedSBF(const std::string & f, HashPair hp, int nh, uint64_t size) :
+    BF(f, hp, nh),
+    sim_bits(nullptr),
+    dif_bits(nullptr)
+{}
+
+compressedSBF::~compressedSBF(){
+    if (sim_bits != nullptr) {
+        delete sim_bits;
+    }
+    if (dif_bits != nullptr) {
+        delete dif_bits;
+    }
+
+}
+
+std::string compressedSBF::get_sim_name(){
+    std::ostringstream oss;
+    oss << nosuffix(filename, std::string(".sim.bf.bv.rrr")) << ".sim.bf.bv.rrr";
+    return oss.str();
+}
+
+std::string compressedSBF::get_dif_name(){
+    std::ostringstream oss;
+    oss << nosuffix(filename, std::string(".sim.bf.bv.rrr")) << ".dif.bf.bv.rrr";
+    return oss.str();
+}
+
+void compressedSBF::load() {
+    // read the actual bits
+    assert(sim_bits == nullptr);
+    assert(dif_bits == nullptr);
+
+    sim_bits = new sdsl::rrr_vector<255>();
+    std::string fn = this->get_sim_name();
+    sdsl::load_from_file(*sim_bits, fn);
+
+    if (fn.substr(fn.size()-19) == "union.sim.bf.bv.rrr"){
+        dif_bits = new sdsl::rrr_vector<255>();
+        sdsl::load_from_file(*dif_bits, this->get_dif_name());
+    } else {
+        dif_bits = new sdsl::rrr_vector<255>(sim_bits->size());
+    }
+}
+
+void compressedSBF::save() {
+    std::cerr << "Saving BF to " << filename << std::endl;
+    sdsl::store_to_file(*sim_bits, this->get_sim_name());
+    std::string fn = this->get_sim_name();
+
+    if (fn.substr(fn.size()-19) == "union.sim.bf.bv.rrr"){
+        sdsl::store_to_file(*dif_bits, this->get_dif_name());
+    }
+}
+
+uint64_t compressedSBF::size() const{
+    assert(sim_bits->size()==dif_bits->size());
+    return sim_bits->size();
+}
+
+int compressedSBF::operator[](uint64_t pos) const{
+    return (*sim_bits)[pos] | (*dif_bits)[pos];
+}
+
+bool compressedSBF::contains(const jellyfish::mer_dna & m, int type) const {
+    //std::cout << "TESTING STUFF: " << m.to_str() << std::endl;
+    std::string temp = m.to_str();
+    jellyfish::mer_dna n = jellyfish::mer_dna(temp);
+    n.canonicalize();
+    //std::cout << "Canonical version! " << n.to_str() << std::endl;
+    uint64_t h0 = hashes.m1.times(n);
+    uint64_t h1 = hashes.m2.times(n);
+
+    //DEBUG: std::cout << "size = " << bits->size() << std::endl;
+    
+    const size_t base = h0 % size();
+    const size_t inc = h1 % size();
+
+    for (unsigned long i = 0; i < num_hash; ++i) {
+        const size_t pos = (base + i * inc) % size();
+        //DEBUG: std::cout << "pos=" << pos << std::endl;
+        if(type == 0){
+            if ((*sim_bits)[pos] == 0) return false;
+        } else if (type == 1){
+            if ((*dif_bits)[pos] == 0) return false;
+        } else {
+            DIE("Error - only sim/dif filter 'types'!");
+        }
+    }
+    return true;
+}
+
+// convience function
+// ironically it looks like we convert back to string and then back to mer_dna.
+// XXX: should probably clean that up once we get a stable build going
+bool compressedSBF::contains(const std::string & str, int type) const {
+    return contains(jellyfish::mer_dna(str), type);
+}
+
+/*
 Uncompressed Bloom Filter (SBT 1.0 Implementation)
 */
 /*============================================*/
@@ -1006,7 +1109,9 @@ sdsl::bit_vector* union_bv_fast(const sdsl::bit_vector & b1, const sdsl::bit_vec
 }
 
 BF* load_bf_from_file(const std::string & fn, HashPair hp, int nh) {
-    if (fn.substr(fn.size()-4) == ".rrr") {
+    if (fn.substr(fn.size()-14) == ".sim.bf.bv.rrr"){
+        return new compressedSBF(fn, hp, nh);
+    } else if (fn.substr(fn.size()-4) == ".rrr") {
         return new BF(fn, hp, nh);
     } else if (fn.substr(fn.size()-10) == ".sim.bf.bv") { //Record name as .sim but load both sim / dif
         return new SBF(fn, hp, nh);

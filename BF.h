@@ -59,6 +59,29 @@ protected:
     unsigned long num_hash;
 };
 
+class compressedSBF : public BF {
+public:
+    compressedSBF(const std::string & filename, HashPair hp, int nh, uint64_t size =0);
+    virtual ~compressedSBF();
+
+    virtual void load();
+    virtual void save();
+
+    virtual std::string get_sim_name();
+    virtual std::string get_dif_name();
+
+    virtual uint64_t size() const;
+
+    virtual int operator[](uint64_t pos) const;
+
+    virtual bool contains(const jellyfish::mer_dna & m, int type) const;
+    bool contains(const std::string & str, int type) const;
+
+protected:
+    sdsl::rrr_vector<255>* sim_bits;
+    sdsl::rrr_vector<255>* dif_bits;
+};
+
 class UncompressedBF : public BF {
 friend class SBF;
 public:
