@@ -169,6 +169,10 @@ void BF::union_into(const BF* other) {
     DIE("not yet implemented");
 }
 
+void BF::union_into(const BF* other, int type) {
+    DIE("not yet implemented");
+}
+
 uint64_t BF::count_ones() const {
     DIE("not yet implemented");
     return 0;
@@ -430,6 +434,37 @@ void UncompressedBF::union_into(const BF* f2) {
     }
 }
 
+// For directed SBF union into uncompressedBF.
+// Type 0 = sim
+// Type 1 = dif
+// type 2 = both
+void UncompressedBF::union_into(const BF* f2, int type){
+     // SBF can be directly unioned into uncompressedBF. Just add sim + dif
+     // NOTE: This only merges the immediate filters, not f2's parent filters
+     // which may contain additional sim bits.
+     const SBF* b = dynamic_cast<const SBF*>(f2);
+     if (b == nullptr) {
+         DIE("Can only union two uncompressed BF");
+     }
+     uint64_t* b1_data = this->bv->data();
+     const uint64_t* b2_sim = b->sim->data();
+     const uint64_t* b2_dif = b->dif->data();
+
+     sdsl::bit_vector::size_type len = size()>>6;
+     for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+        if (type == 0){
+            *b1_data = (*b1_data) | (*b2_sim++);
+        } else if (type == 1){
+            *b1_data = (*b1_data) | (*b2_dif++);
+        } else if (type == 2){
+            *b1_data = (*b1_data) | (*b2_sim++) | (*b2_dif++);
+        } else {
+            DIE("Invalid type to union_into(f2, type)");
+        }
+        b1_data++;
+     }
+}
+
 uint64_t UncompressedBF::similarity(const BF* other, int type) const {
     assert(other->size() == size());
 
@@ -684,8 +719,8 @@ void SBF::save() {
 
 uint64_t SBF::size() const {
     uint64_t sim_size = sim->size();
-    uint64_t dif_size = dif->size();
-    assert(sim_size == dif_size);
+    //uint64_t dif_size = dif->size();
+    assert(sim_size == dif->size());
     return sim_size;
 }
 
@@ -747,7 +782,7 @@ void SBF::union_into(const BF* f2) {
     uint64_t* b1_sim_data = this->sim->data();
     uint64_t* b1_dif_data = this->dif->data();
     const uint64_t* b2_sim_data = b->sim->data();
-    const uint64_t* b2_dif_data = b->dif->data();
+    const uint64_t* b2_dif_data = b->dif->data(); //This should always be empty (?) 
 
     sdsl::bit_vector::size_type len = size()>>6;
     for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
@@ -758,6 +793,10 @@ void SBF::union_into(const BF* f2) {
         b2_sim_data++;
         b2_dif_data++;
     }
+}
+
+void SBF::union_into(const BF* f2, int type){
+    DIE("Not yet implemented (SBF)");
 }
 
 // Similarity could mean something different for SBF versus BF but right now it doesnt.
@@ -936,12 +975,13 @@ void SBF::remove_duplicate(BF* f2){
     if (b == nullptr) {
         DIE("remove_duplicates requires two SBFs");
     }
-    uint64_t* b1_data = this->sim->data();
-    const uint64_t* b2_data = b->sim->data();
+    uint64_t* b1_sim_data = this->sim->data();
+    const uint64_t* b2_sim_data = b->sim->data();
     sdsl::bit_vector::size_type len = size()>>6;
     for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
-        *b1_data = (*b1_data) ^ (*b2_data++);
-        b1_data++;
+        *b1_sim_data = (*b1_sim_data) ^ (*b2_sim_data);
+        b1_sim_data++;
+        b2_sim_data++;
     }
 }
 
@@ -953,6 +993,9 @@ void SBF::add_different(const sdsl::bit_vector & new_dif){
     this->sim = temp;
 } 
 
+
+// We want the elements in THIS->sim which are NOT in f2->sim
+// XXX: Delete comments below this point if the new thing works
 // Calculates what was removed [from this node] by the 'and' operation of sim vectors.
 // XXX: This is also super inefficient because we do the same calculation in union_into
 // but we can't edit the vector in this stage of the process
@@ -961,6 +1004,18 @@ sdsl::bit_vector* SBF::calc_new_dif_bv(const BF* f2){
     if (b == nullptr) {
         DIE("calc_sim_bv requires two SBFs");
     }
+
+    sdsl::bit_vector* new_dif = dif_bv_fast(*this->sim, *b->sim);
+    uint64_t* nd_data = new_dif->data();
+    const uint64_t* b1_sim_data = this->sim->data();
+    sdsl::bit_vector::size_type len = size()>>6;
+    for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+        *nd_data = (*nd_data) & (*b1_sim_data++);
+        nd_data++;
+    }
+
+    return new_dif;
+    /*
     sdsl::bit_vector* new_dif = sim_bv_fast(*this->sim, *b->sim);
     uint64_t* ndif_data = new_dif->data();
     const uint64_t* osim_data = this->sim->data();
@@ -970,6 +1025,7 @@ sdsl::bit_vector* SBF::calc_new_dif_bv(const BF* f2){
         ndif_data++;
     }
     return new_dif;
+    */
 }
 
 // The sim vector is the intersection of sim vectors

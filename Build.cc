@@ -615,11 +615,6 @@ void dynamic_splitbuild(
     delete_bloom_tree(root);
 }
 
-
-
-
-
-
 /*** NOT USED ***/
 /*
 // builds a near-complete bt (the last level might be only partially full)

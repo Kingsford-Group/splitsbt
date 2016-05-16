@@ -64,6 +64,14 @@ void BloomTree::set_parent(const BloomTree* p) {
     parent = const_cast<BloomTree*>(p);
 }
 
+HashPair BloomTree::get_hashes() const {
+    return hashes;
+}
+
+int BloomTree::get_num_hash() const{
+    return num_hash;
+}
+
 // return the bloom filter, loading first if necessary
 BF* BloomTree::bf() const {
     load();
@@ -369,6 +377,4 @@ void write_compressed_bloom_tree(
     write_compressed_bloom_tree_helper(out, root);
     std::cerr << "Done." << std::endl;
 }
-
-
 

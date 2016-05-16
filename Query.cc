@@ -119,8 +119,8 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
     }
 
     } else {// end of normal
+        c = q->matched_kmers;
         for (const auto & m : q->query_kmers) {
-
             // We can break whenever the total matched is above threshold.
             //if (q->matched_kmers >= QUERY_THRESHOLD * q->total_kmers){
             //    return true;
@@ -218,7 +218,7 @@ void print_query_results(const QuerySet & qs, std::ostream & out) {
 
 
 void query_batch(BloomTree* root, QuerySet & qs) {
-    std::cerr << "Batch Query!" << std::endl;
+    //std::cerr << "Batch Query!" << std::endl;
 
     SplitBloomTree* sroot = dynamic_cast<SplitBloomTree*>(root);
     if (sroot == nullptr) { //the standard query_batch.
@@ -252,7 +252,7 @@ void query_batch(BloomTree* root, QuerySet & qs) {
             if (root->child(0)) {
                 query_batch(root->child(0), pass);
             }
-
+            
             // if present, recurse into right child
             if (root->child(1)) {
                 query_batch(root->child(1), pass);
@@ -260,14 +260,15 @@ void query_batch(BloomTree* root, QuerySet & qs) {
         }
     } else { //Right now we have two general query types.
         QuerySet pass;
+        QuerySet copy;
         unsigned n = 0;
-        std::cerr << "Split Bloom Tree" << std::endl;
+        //std::cerr << "Split Bloom Tree" << std::endl;
         bool has_children = root->child(0) || root->child(1);
 
         for (auto & q : qs) {
             //If query has enough matched kmers (from sim), don't waste time searching
             if (q->matched_kmers >= QUERY_THRESHOLD * q->total_kmers){
-                //std::cerr << "Skipped search (enough similar kmers already found)" << std::endl;
+               // std::cerr << "Skipped search (enough similar kmers already found)" << std::endl;
                 if (has_children) {
                     pass.emplace_back(q);
                 } else {
@@ -277,11 +278,25 @@ void query_batch(BloomTree* root, QuerySet & qs) {
             } else if (query_passes(root, q)) { //q->query_kmers)) {
                 if (has_children) {
                     pass.emplace_back(q);
+                    //copy.emplace_back(QueryInfo(*q));
                 } else {
                     q->matching.emplace_back(root);
                     n++;
                 }
             }
+        }
+
+        //Copy the queries that pass locally
+        //We can then restore certain values after a depth traversal.
+        //Each node is storing the query_kmers and # matching at that position
+        std::vector<int> mk_vector;
+        std::vector<std::set<jellyfish::mer_dna>> qk_vector;
+        std::vector<std::string> qs_vector;
+        for (auto qc : pass) {
+            mk_vector.emplace_back(qc->matched_kmers);
+            qk_vector.emplace_back(qc->query_kmers);
+            qs_vector.emplace_back(qc->query);
+            //copy.emplace_back(qc);
         }
 
         // $(node name) $(internal / leaf) $(number of matches)
@@ -296,6 +311,28 @@ void query_batch(BloomTree* root, QuerySet & qs) {
             if (root->child(0)) {
                 query_batch(root->child(0), pass);
             }
+
+            //temp_copy restores relevant queries for left child.
+            //QuerySet::iterator copy_it = copy.begin();
+            int copy_it = 0;
+            if (mk_vector.size() != pass.size()){
+                DIE("DELETED QUERY NEEDS TO BE RESTORED");
+            }
+            for (auto & q : pass){
+                if(q->query != qs_vector[copy_it]){
+                    DIE("Query out of order!");
+                }
+                //QueryInfo* temp = *copy_it;
+                if(q->matched_kmers != mk_vector[copy_it]){ //temp->matched_kmers){
+                    //std::cout << "Restoring to node standard" << std::endl;
+                    //std::cout << q->matched_kmers << " " << mk_vector[copy_it] << std::endl;
+                }
+                //q->query_kmers=temp->query_kmers;
+                q->query_kmers=qk_vector[copy_it];
+                q->matched_kmers=mk_vector[copy_it];//temp->matched_kmers;            
+                copy_it++; 
+            }
+
 
             // if present, recurse into right child
             if (root->child(1)) {

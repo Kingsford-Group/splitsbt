@@ -34,6 +34,9 @@ public:
     virtual void set_dirty(bool b) const;
     static void protected_cache(bool b);
 
+    virtual HashPair get_hashes() const;
+    virtual int get_num_hash() const;
+
 protected:
     bool load() const;
     void unload() const;

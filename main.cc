@@ -174,8 +174,6 @@ int process_options(int argc, char* argv[]) {
         bf_size = atol(argv[optind+2]);
         query_file = argv[optind+3];
         out_file = argv[optind+4];
-
-
     } else if (command == "compress") {
         if (optind >= argc-2) print_usage();
         bloom_tree_file = argv[optind+1];
@@ -187,6 +185,10 @@ int process_options(int argc, char* argv[]) {
         bvfile2 = argv[optind+3];
         of_sim = argv[optind+4];
         of_dif = argv[optind+5];
+    } else if (command == "sbtconvert") {
+        if (optind >= argc-2) print_usage();
+        bloom_tree_file=argv[optind+1];
+        out_file = argv[optind+2];//location not file
     }
     return optind;
 }
@@ -309,6 +311,17 @@ int main(int argc, char* argv[]) {
         //sim_bf->save();
         //dif_bf->save();
 
+    } else if (command == "sbtconvert"){
+        std::cerr << "Loading bloom tree topology: " << bloom_tree_file
+            << std::endl;
+        SplitBloomTree* root = read_split_bloom_tree(bloom_tree_file);
+        HashPair hp = root->get_hashes();
+        int nh = root->get_num_hash();
+        uint64_t size = root->bf()->size();
+        UncompressedBF* cumul = new UncompressedBF("temp_cumul", hp, nh, size);
+
+        std::cerr << "Converting..." << std::endl;
+        convert_sbt_filters(root, cumul, out_file);
     }
     std::cerr << "Done." << std::endl;
 }

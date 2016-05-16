@@ -40,7 +40,7 @@ SplitBloomTree::~SplitBloomTree() {
 void SplitBloomTree::unload() const { 
     // you can't unload something until you remove it from the cache
     // DEBUG 
-    std::cerr << "Unloading " << name() << std::endl;
+    //std::cerr << "Unloading " << name() << std::endl;
     
     // free the memory
     if (bloom_filter != nullptr) {
@@ -87,7 +87,7 @@ bool SplitBloomTree::load() const {
 // These nodes were not previously linked and thus we dont have any 'new differences' to add back in
 SplitBloomTree* SplitBloomTree::union_bloom_filters(const std::string & new_name, SplitBloomTree* f2) {
 
-    std::cerr << "Cache size (start): " << cache_size() << std::endl;
+    //std::cerr << "Cache size (start): " << cache_size() << std::endl;
     protected_cache(true);
 
     SBF* other_bf = dynamic_cast<SBF*>(f2->bf());
@@ -129,7 +129,7 @@ SplitBloomTree* SplitBloomTree::union_bloom_filters(const std::string & new_name
     bt->dirty = true;
     bt->unload();
 
-    std::cerr << "Cache size (end): " << cache_size() << std::endl; 
+    //std::cerr << "Cache size (end): " << cache_size() << std::endl; 
     protected_cache(false);
     return bt; 
 }
@@ -140,7 +140,7 @@ SplitBloomTree* SplitBloomTree::union_bloom_filters(const std::string & new_name
 void SplitBloomTree::union_into(const SplitBloomTree* other) {
     //SplitBloomTree* temp = new SplitBloomTree("temporary.sim.bf.bv", hashes, num_hash);
 
-    std::cerr << "Cache size (start): " << cache_size() << std::endl;
+    //std::cerr << "Cache size (start): " << cache_size() << std::endl;
     protected_cache(true);
 
     SBF* my_bf = dynamic_cast<SBF*>(bf());
@@ -181,7 +181,7 @@ void SplitBloomTree::union_into(const SplitBloomTree* other) {
         cbf1->add_different(*new_dif);
         child(1)->set_dirty(true);
     }
-    std::cerr << "Cache size (end): " << cache_size() << std::endl; 
+    //std::cerr << "Cache size (end): " << cache_size() << std::endl; 
     protected_cache(false);
 
     delete new_dif;
@@ -269,6 +269,33 @@ SplitBloomTree* read_split_bloom_tree(const std::string & filename, bool read_ha
     std::cerr << "Read " << n << " nodes in Bloom Tree" << std::endl;
     
     return tree_root;
+}
+
+void convert_sbt_filters(BloomTree* T, BF* cumul, std::string out_loc){
+    SplitBloomTree* ST = dynamic_cast<SplitBloomTree*>(T);
+    if (ST == nullptr){
+        DIE("Could not convert BloomTree to SplitBT");
+    }
+    // handle the case of inserting into an empty tree
+    if (T == nullptr) {
+        DIE("Empty tree cannot be rebuilt.");
+    }
+
+    std::string base_name = test_basename(T->name(),".sim.bf.bv");
+    std::string new_name = out_loc + "/" + base_name + ".bf.bv";
+    if (ST->num_children() == 0) {
+        BF* new_bf = new UncompressedBF(new_name, cumul);
+        new_bf->union_into(ST->bf(),2);
+        new_bf->save();
+        delete new_bf;
+    } else {
+        BF* new_bf = new UncompressedBF(new_name, cumul);
+        new_bf->union_into(ST->bf(),0); // Just union similarity
+        convert_sbt_filters(ST->child(0), new_bf, out_loc);
+        convert_sbt_filters(ST->child(1), new_bf, out_loc);
+        delete new_bf;
+    }
+
 }
 
 /*

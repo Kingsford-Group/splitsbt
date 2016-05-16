@@ -40,6 +40,7 @@ public:
     virtual std::tuple<uint64_t, uint64_t> b_similarity(const BF* other) const;
     virtual BF* union_with(const std::string & new_name, const BF* f2) const;
     virtual void union_into(const BF* f2);
+    virtual void union_into(const BF* f2, int type);
     virtual uint64_t count_ones() const;
     virtual uint64_t count_ones(int type) const;
     virtual void compress();
@@ -99,6 +100,7 @@ public:
     virtual std::tuple<uint64_t, uint64_t> b_similarity(const BF* other) const;
     virtual BF* union_with(const std::string & new_name, const BF* f2) const;
     virtual void union_into(const BF* f2);
+    virtual void union_into(const BF* f2, int type);
     virtual uint64_t count_ones() const;
     virtual uint64_t count_ones(int type) const;
     virtual void compress();
@@ -139,6 +141,7 @@ public:
     virtual std::tuple<uint64_t, uint64_t> b_similarity(const BF* other) const;
     virtual BF* union_with(const std::string & new_name, const BF* f2) const;
     virtual void union_into(const BF* f2);
+    virtual void union_into(const BF* f2, int type);
     virtual uint64_t count_ones() const;
     virtual uint64_t count_ones(int type) const;
     virtual void compress();

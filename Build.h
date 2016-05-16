@@ -9,5 +9,4 @@ void convert_jfbloom_to_rrr(const std::string & jfbloom_file, const std::string 
 void build_bt_from_jfbloom(const std::vector<std::string> & leaves, const std::string & outf, unsigned parallel_level);
 void dynamic_build(const std::string & hashes_file, const std::vector<std::string> & leaves, const std::string & outf, const int type);
 void dynamic_splitbuild(const std::string & hashes_file, const std::vector<std::string> & leaves, const std::string & outf, const int type);
-
 #endif

@@ -49,6 +49,14 @@ struct QueryInfo {
 	    	n++;
     	}
     }
+
+/*    
+    QueryInfo(QueryInfo & copy) :
+    query(copy.query),
+    query_kmers(copy.query_kmers),
+    total_kmers(copy.total_kmers),
+    matched_kmers(copy.matched_kmers){}
+*/
     ~QueryInfo() {}
    
     std::string query;
