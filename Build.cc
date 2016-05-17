@@ -448,14 +448,23 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
             DIE("Something is wrong!");
         } else {
             // union the new filter with this node
+            //std::cerr << "Num 1s (T Pre-Union Sim): " << T->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (T Pre-Union Dif): " << T->bf()->count_ones(1) << std::endl;
             //std::cerr << "Num 1s (N Pre-Union Sim): " << N->bf()->count_ones(0) << std::endl;
             //std::cerr << "Num 1s (N Pre-Union Dif): " << N->bf()->count_ones(1) << std::endl;
             //std::cerr << "Num 1s (Left Child Sim): " << T->child(0)->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (Left Child Dif): " << T->child(0)->bf()->count_ones(1) << std::endl;
             //std::cerr << "Num 1s (Right Child Sim): " << T->child(1)->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (Right Child Dif): " << T->child(1)->bf()->count_ones(1) << std::endl;
             T->union_into(N);
+            //std::cerr << "Num 1s (T Post-Union Sim): " << T->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (T Post-Union Dif): " << T->bf()->count_ones(1) << std::endl;
             //std::cerr << "Num 1s (N Post-Union Sim): " << N->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (N Post-Union Dif): " << N->bf()->count_ones(1) << std::endl;
             //std::cerr << "Num 1s (Left Child Sim): " << T->child(0)->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (Left Child Dif): " << T->child(0)->bf()->count_ones(1) << std::endl;
             //std::cerr << "Num 1s (Right Child Sim): " << T->child(1)->bf()->count_ones(0) << std::endl;
+            //std::cerr << "Num 1s (Right Child Dif): " << T->child(1)->bf()->count_ones(1) << std::endl;
           
             // find the most similar child and move to it
             uint64_t best_sim = 0;
