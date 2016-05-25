@@ -284,7 +284,6 @@ int main(int argc, char* argv[]) {
         getline(in, header);
         std::vector<std::string> fields;
         SplitString(header, ',', fields);
-            
         compress_bt(root);
         write_compressed_bloom_tree(out_file, root, fields[1]);
     } else if (command == "split") {

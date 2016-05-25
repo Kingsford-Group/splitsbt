@@ -120,6 +120,7 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
 
     } else {// end of normal
         c = q->matched_kmers;
+        std::set<jellyfish::mer_dna> passedKmers;
         for (const auto & m : q->query_kmers) {
             // We can break whenever the total matched is above threshold.
             //if (q->matched_kmers >= QUERY_THRESHOLD * q->total_kmers){
@@ -127,14 +128,19 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
             //}
             if (bf->contains(m,0)) { //kmer found in similarity filter
                 q->matched_kmers+=weight; //record the hit (weighted for future weighted functionality)
-                q->query_kmers.erase(m); //we no longer need to store kmer.
+                //q->query_kmers.erase(m); //we no longer need to store kmer.
                 c+=weight;
             } else if (bf->contains(m,1)) { //kmer found in difference filter
                 c+=weight; //treat it like regular SBT query.
+                passedKmers.insert(m); //Insert kmers which exist somewhere (and weren't in sim)
             }
             
         }
+
+        q->query_kmers=passedKmers;
     }
+    //std::cerr << root->name() << std::endl;
+    //std::cerr << c << " " << QUERY_THRESHOLD * q->total_kmers << std::endl;
     return (c >= QUERY_THRESHOLD * q->total_kmers);
 }
 
@@ -268,7 +274,7 @@ void query_batch(BloomTree* root, QuerySet & qs) {
         for (auto & q : qs) {
             //If query has enough matched kmers (from sim), don't waste time searching
             if (q->matched_kmers >= QUERY_THRESHOLD * q->total_kmers){
-               // std::cerr << "Skipped search (enough similar kmers already found)" << std::endl;
+                //std::cerr << "Skipped search (enough similar kmers already found)" << std::endl;
                 if (has_children) {
                     pass.emplace_back(q);
                 } else {
@@ -296,6 +302,7 @@ void query_batch(BloomTree* root, QuerySet & qs) {
             mk_vector.emplace_back(qc->matched_kmers);
             qk_vector.emplace_back(qc->query_kmers);
             qs_vector.emplace_back(qc->query);
+            //std::cerr << "local qc recorded as " << qc->matched_kmers << std::endl;
             //copy.emplace_back(qc);
         }
 
@@ -323,12 +330,14 @@ void query_batch(BloomTree* root, QuerySet & qs) {
                     DIE("Query out of order!");
                 }
                 //QueryInfo* temp = *copy_it;
-                if(q->matched_kmers != mk_vector[copy_it]){ //temp->matched_kmers){
+                //if(q->matched_kmers != mk_vector[copy_it]){ //temp->matched_kmers){
                     //std::cout << "Restoring to node standard" << std::endl;
                     //std::cout << q->matched_kmers << " " << mk_vector[copy_it] << std::endl;
-                }
+                //}
+                //std::cerr << "Pre-restore qc " << q->matched_kmers << std::endl;
                 //q->query_kmers=temp->query_kmers;
                 q->query_kmers=qk_vector[copy_it];
+                //std::cerr << "post-restore qc " << q->matched_kmers << std::endl;
                 q->matched_kmers=mk_vector[copy_it];//temp->matched_kmers;            
                 copy_it++; 
             }
