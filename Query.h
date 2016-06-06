@@ -15,15 +15,17 @@ extern float QUERY_THRESHOLD;
 struct QueryInfo {
     QueryInfo(const std::string & q) : 
     query(q), 
-    query_kmers(kmers_in_string(q)),
+    query_kmers(vector_kmers_in_string(q)),
     total_kmers(query_kmers.size()),
+    tail_index(total_kmers-1),
     matched_kmers(0)  {}
 
     QueryInfo(const std::string & q, const std::string & w){
 	    query = q;
-    	query_kmers = kmers_in_string(q);
+    	query_kmers = vector_kmers_in_string(q);
         total_kmers = query_kmers.size();
-        matched_kmers = 0; 
+        tail_index = total_kmers-1;
+        matched_kmers = 0;
 	    std::vector<std::string> fields;
     	SplitString(w, ' ', fields);
     	unsigned n = 0;
@@ -60,10 +62,11 @@ struct QueryInfo {
     ~QueryInfo() {}
    
     std::string query;
-    std::set<jellyfish::mer_dna> query_kmers;
+    std::vector<jellyfish::mer_dna> query_kmers;
     std::vector<const BloomTree*> matching;
     std::vector<float> weight;
     int total_kmers;
+    int tail_index;
     int matched_kmers;
 };
 

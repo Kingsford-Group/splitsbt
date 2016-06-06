@@ -821,7 +821,7 @@ uint64_t SBF::similarity(const BF* other, int type) const {
     if (type == 1) {
 		uint64_t xor_count = 0;
 	   	uint64_t or_count = 0;
-    
+        //std::cerr << "Type 1 Similarity!" << std::endl;
 		sdsl::bit_vector::size_type len = size()>>6;
 		for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
         		xor_count += __builtin_popcountl( ((*b1_sim_data) ^ (*b2_sim_data)) | ((*b1_dif_data) ^ (*b2_dif_data)) );
@@ -848,6 +848,7 @@ uint64_t SBF::similarity(const BF* other, int type) const {
                 }
 		return size() - count;
 	} else if (type == 0) {
+        //std::cerr << "Default Similarity!" << std::endl;
  		uint64_t count = 0;
 		sdsl::bit_vector::size_type len = size()>>6;
         for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {

@@ -119,25 +119,40 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
     }
 
     } else {// end of normal
+        // tail index 
         c = q->matched_kmers;
-        std::set<jellyfish::mer_dna> passedKmers;
-        for (const auto & m : q->query_kmers) {
+        //std::set<jellyfish::mer_dna> passedKmers;
+        //for (const auto & m : q->query_kmers) {
+        // We dont add or delete elements. Re-arranging their order based on tail index
+        // should allow storage of a single int rather then the full kmer set
+        for (int i = 0; i <= q->tail_index; i++) {
+            auto & m = q->query_kmers[i];
             // We can break whenever the total matched is above threshold.
             //if (q->matched_kmers >= QUERY_THRESHOLD * q->total_kmers){
             //    return true;
             //}
             if (bf->contains(m,0)) { //kmer found in similarity filter
                 q->matched_kmers+=weight; //record the hit (weighted for future weighted functionality)
+                swap_kmer_position(q->query_kmers,i, q->tail_index);
+                //something we havent seen now occupies the same position as us
+                //something we HAVE seen now occupies the tail position. 
+                //decrease both so we stay on same index but don't look at tail again.
+                q->tail_index--;
+                i--;
                 //q->query_kmers.erase(m); //we no longer need to store kmer.
                 c+=weight;
             } else if (bf->contains(m,1)) { //kmer found in difference filter
                 c+=weight; //treat it like regular SBT query.
-                passedKmers.insert(m); //Insert kmers which exist somewhere (and weren't in sim)
+                //passedKmers.insert(m); //Insert kmers which exist somewhere (and weren't in sim)
+            } else{ //kmer doesnt exist at this depth of the tree
+                //we remove it like the sim filter but dont add to matched_kmers
+                swap_kmer_position(q->query_kmers,i, q->tail_index);
+                q->tail_index--;
+                i--;
             }
             
         }
-
-        q->query_kmers=passedKmers;
+        //q->query_kmers=passedKmers;
     }
     //std::cerr << root->name() << std::endl;
     //std::cerr << c << " " << QUERY_THRESHOLD * q->total_kmers << std::endl;
@@ -295,13 +310,15 @@ void query_batch(BloomTree* root, QuerySet & qs) {
         //Copy the queries that pass locally
         //We can then restore certain values after a depth traversal.
         //Each node is storing the query_kmers and # matching at that position
-        std::vector<int> mk_vector;
-        std::vector<std::set<jellyfish::mer_dna>> qk_vector;
-        std::vector<std::string> qs_vector;
+        std::vector<int> mk_vector; //matched_kmers
+        std::vector<int> ti_vector; //tail_index
+        //std::vector<std::set<jellyfish::mer_dna>> qk_vector;
+        //std::vector<std::string> qs_vector;
         for (auto qc : pass) {
             mk_vector.emplace_back(qc->matched_kmers);
-            qk_vector.emplace_back(qc->query_kmers);
-            qs_vector.emplace_back(qc->query);
+            ti_vector.emplace_back(qc->tail_index);
+            //qk_vector.emplace_back(qc->query_kmers);
+            //qs_vector.emplace_back(qc->query);
             //std::cerr << "local qc recorded as " << qc->matched_kmers << std::endl;
             //copy.emplace_back(qc);
         }
@@ -326,9 +343,9 @@ void query_batch(BloomTree* root, QuerySet & qs) {
                 DIE("DELETED QUERY NEEDS TO BE RESTORED");
             }
             for (auto & q : pass){
-                if(q->query != qs_vector[copy_it]){
-                    DIE("Query out of order!");
-                }
+                //if(q->query != qs_vector[copy_it]){
+                //    DIE("Query out of order!");
+                //}
                 //QueryInfo* temp = *copy_it;
                 //if(q->matched_kmers != mk_vector[copy_it]){ //temp->matched_kmers){
                     //std::cout << "Restoring to node standard" << std::endl;
@@ -336,9 +353,10 @@ void query_batch(BloomTree* root, QuerySet & qs) {
                 //}
                 //std::cerr << "Pre-restore qc " << q->matched_kmers << std::endl;
                 //q->query_kmers=temp->query_kmers;
-                q->query_kmers=qk_vector[copy_it];
+                //q->query_kmers=qk_vector[copy_it];
                 //std::cerr << "post-restore qc " << q->matched_kmers << std::endl;
-                q->matched_kmers=mk_vector[copy_it];//temp->matched_kmers;            
+                q->matched_kmers=mk_vector[copy_it];//temp->matched_kmers;
+                q->tail_index=ti_vector[copy_it];            
                 copy_it++; 
             }
 
