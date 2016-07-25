@@ -25,13 +25,16 @@ public:
     virtual void set_bit(uint64_t p);
     virtual uint64_t size() const;
 
-    virtual HashPair get_hashes();
-    virtual int get_num_hash();
+    virtual std::string get_name() const;
+    virtual HashPair get_hashes() const;
+    virtual int get_num_hash() const;
 
     virtual bool contains(const jellyfish::mer_dna & m) const;
+    virtual bool contains(const size_t pos) const;
     bool contains(const std::string & str) const;
 
     virtual bool contains(const jellyfish::mer_dna & m, int type) const;
+    virtual bool contains(const size_t pos, int type) const;
     bool contains(const std::string & str, int type) const;
 
     void add(const jellyfish::mer_dna & m);
@@ -44,13 +47,16 @@ public:
     virtual uint64_t count_ones() const;
     virtual uint64_t count_ones(int type) const;
     virtual void compress();
+    virtual void compress(BF* rm);
 
     virtual BF* sim_with(const std::string & new_name, const BF* f2) const;
     virtual void sim_into(const BF* f2);
 
     virtual BF* dif_with(const std::string & new_name, const BF* f2) const;
     virtual void dif_into(const BF* f2);
-
+    
+    virtual void update_mask(const BF* update);
+    virtual void update_mask(const BF* u1, const BF* u2);
     // Things which are not used in all cases but were added to save time in interface
 protected:
     std::string filename;
@@ -76,6 +82,7 @@ public:
     virtual int operator[](uint64_t pos) const;
 
     virtual bool contains(const jellyfish::mer_dna & m, int type) const;
+    virtual bool contains(const size_t pos, int type) const;
     bool contains(const std::string & str, int type) const;
 
 protected:
@@ -120,13 +127,16 @@ friend class UncompressedBF;
 public:
     SBF(const std::string & filename, HashPair hp, int nh, uint64_t size = 0);
     SBF(const std::string & filename, BF* copy);
+    SBF(const std::string & filename, BF* mask, BF* copy);
     virtual ~SBF();
 
     virtual void load();
     virtual void save();
 
     virtual bool contains(const jellyfish::mer_dna & m, int type) const;
+    virtual bool contains(const size_t pos, int type) const;
     bool contains(const std::string & str, int type) const;
+    //bool contains(const size_t & m, int type) const;
 
     virtual std::string get_sim_name();
     virtual std::string get_dif_name();
@@ -137,6 +147,7 @@ public:
     virtual void unset_bit(uint64_t p);
     virtual void unset_difbit(uint64_t p);
     virtual uint64_t size() const;
+    virtual uint64_t size(int type) const;
     virtual uint64_t similarity(const BF* other, int type) const;
     virtual std::tuple<uint64_t, uint64_t> b_similarity(const BF* other) const;
     virtual BF* union_with(const std::string & new_name, const BF* f2) const;
@@ -145,7 +156,7 @@ public:
     virtual uint64_t count_ones() const;
     virtual uint64_t count_ones(int type) const;
     virtual void compress();
-
+    virtual void compress(BF* rm);
     // Consider using bit_vectors for both.
     // Would like for both of these to be constant but having problems
     virtual void remove_duplicate(BF* f2);
@@ -163,6 +174,8 @@ public:
     virtual BF* dif_with(const std::string & new_name, const BF* f2) const;
     virtual void dif_into(const BF* f2);
 
+    virtual void update_mask(const BF* update);
+    virtual void update_mask(const BF* u1, const BF* u2);
     //virtual bool contains(const jellyfish::mer_dna & m, int type) const;
     //bool contains(std::string str, int type) const;
 protected:

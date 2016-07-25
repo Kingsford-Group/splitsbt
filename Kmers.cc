@@ -1,6 +1,6 @@
 #include "Kmers.h"
 #include "util.h"
-
+#include "BF.h"
 /*
 // return the number for each DNA base
 int acgt(char c) {
@@ -61,3 +61,43 @@ void swap_kmer_position(std::vector<jellyfish::mer_dna> & v, int opos, int npos)
         v[opos]=temp;
     }
 }
+
+void swap_kmer_position(std::vector<size_t> & v, int opos, int npos){
+    if (npos > opos) {
+        assert(npos < v.size());
+        auto temp = v[npos];
+        v[npos]=v[opos];
+        v[opos]=temp;
+    }
+}
+
+// This assumes num_hashes is one and stores the direct size_t position.
+// **More accurate to say it scales with num_hashes but is inefficient if num_hashes > 1
+// The alternative would be to store two size_t values (base and inc) [more efficient than many size_t]
+/*std::vector<size_t> vector_hash_conversion(BF* root, std::vector<jellyfish::mer_dna> v){
+    HashPair hashes = root->get_hashes();
+    unsigned long num_hash = root->get_num_hash();
+    uint64_t size = root->size();
+
+    std::vector<size_t> out(v.size()*num_hash);
+
+    uint64_t index=0;
+    for (size_t i=0; i<v.size(); i++){
+        jellyfish::mer_dna m = v[i];
+        m.canonicalize();
+        uint64_t h0 = hashes.m1.times(m);
+        uint64_t h1 = hashes.m2.times(m);
+        size_t base = h0 % size;
+        size_t inc = h1 % size;
+        for (unsigned long j = 0; j < num_hash; ++j){
+            const size_t pos = (base + j * inc) % size;
+            out[index]=pos;
+            index++;
+        }        
+    }
+    if (index != out.size()){
+        DIE("Index mismatch with output vector");
+    }
+
+    return out;
+}*/

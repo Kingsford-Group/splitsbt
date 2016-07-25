@@ -12,17 +12,19 @@
 
 extern float QUERY_THRESHOLD;
 
+std::vector<size_t> vector_hash_conversion(BF* root, std::vector<jellyfish::mer_dna> v);
+
 struct QueryInfo {
-    QueryInfo(const std::string & q) : 
+    QueryInfo(BF* root, const std::string & q) : 
     query(q), 
-    query_kmers(vector_kmers_in_string(q)),
+    query_kmers(vector_hash_conversion(root, vector_kmers_in_string(q))),
     total_kmers(query_kmers.size()),
     tail_index(total_kmers-1),
     matched_kmers(0)  {}
 
-    QueryInfo(const std::string & q, const std::string & w){
+    QueryInfo(BF* root, const std::string & q, const std::string & w){
 	    query = q;
-    	query_kmers = vector_kmers_in_string(q);
+    	query_kmers = vector_hash_conversion(root, vector_kmers_in_string(q));
         total_kmers = query_kmers.size();
         tail_index = total_kmers-1;
         matched_kmers = 0;
@@ -62,7 +64,8 @@ struct QueryInfo {
     ~QueryInfo() {}
    
     std::string query;
-    std::vector<jellyfish::mer_dna> query_kmers;
+    std::vector<size_t> query_kmers;
+    //std::vector<jellyfish::mer_dna> query_kmers;
     std::vector<const BloomTree*> matching;
     std::vector<float> weight;
     int total_kmers;
@@ -80,6 +83,7 @@ void query(BloomTree* root, const std::set<jellyfish::mer_dna> & q, std::vector<
 void check_bt(BloomTree* root);
 void draw_bt(BloomTree* root, std::string outfile);
 void compress_bt(BloomTree* root);
-
+void compress_splitbt(BloomTree* root, BF* rbf); 
 void leaf_query_from_file(BloomTree* root, const std::string & fn, std::ostream & o);
+
 #endif

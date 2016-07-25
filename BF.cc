@@ -1,6 +1,7 @@
 #include "BF.h"
 #include "Kmers.h"
 #include "util.h"
+#include "bit_pointer.hpp"
 
 #include <jellyfish/file_header.hpp>
 
@@ -78,6 +79,16 @@ bool BF::contains(const jellyfish::mer_dna & m) const {
     return true;
 }
 
+bool BF::contains(const size_t pos) const{
+    if ((*this)[pos] == 0) return false;
+    return true;
+}
+
+bool BF::contains(const size_t pos, int type) const{
+    if ((*this)[pos] == 0) return false;
+    return true;
+}
+
 // convience function
 bool BF::contains(const std::string & str) const {
     //jellyfish::mer_dna temp = jellyfish::mer_dna(str);
@@ -101,12 +112,15 @@ uint64_t BF::size() const {
     return bits->size();
 }
 
-HashPair BF::get_hashes() {
+HashPair BF::get_hashes() const {
     return hashes;
 }
 
-int BF::get_num_hash() {
+int BF::get_num_hash() const {
     return num_hash;
+}
+std::string BF::get_name() const{
+    return filename;
 }
 
 int BF::operator[](uint64_t pos) const {
@@ -187,6 +201,10 @@ void BF::compress() {
 	DIE("Cant compress rrr further with existing code base");
 }
 
+void BF::compress(BF* rm){
+    DIE("Cant compress rrr further with existing code base");
+}
+
 BF* BF::sim_with(const std::string & new_name, const BF* f2) const{
     assert(bits->size() == f2->size());
 
@@ -239,6 +257,14 @@ BF* BF::dif_with(const std::string & new_name, const BF* f2) const{
 }
 void BF::dif_into(const BF* f2){
     DIE("not yet implemented");
+}
+
+void BF::update_mask(const BF* update){
+    DIE("not implemented");
+}
+
+void BF::update_mask(const BF* u1, const BF* u2){
+    DIE("not implemented.");
 }
 
 /*
@@ -333,6 +359,17 @@ bool compressedSBF::contains(const jellyfish::mer_dna & m, int type) const {
         } else {
             DIE("Error - only sim/dif filter 'types'!");
         }
+    }
+    return true;
+}
+
+bool compressedSBF::contains(const size_t pos, int type) const{
+    if(type == 0){
+        if ((*sim_bits)[pos] == 0) return false;
+    } else if (type == 1){
+        if ((*dif_bits)[pos] == 0) return false;
+    } else {
+        DIE("Error - only sim/dif filter 'types'!");
     }
     return true;
 }
@@ -665,6 +702,242 @@ SBF::SBF(const std::string & f, BF* copy) :
     }
 }
 
+// Resize constructor - BF* a is the 
+SBF::SBF(const std::string & f, BF* rm, BF* o) :
+    BF(f, o->get_hashes(), o->get_num_hash()),
+    sim(nullptr),
+    dif(nullptr) 
+{
+    // Bit vector encoding bits to be removed
+    const SBF* remove = dynamic_cast<SBF*>(rm);
+    if (remove == nullptr) {
+        DIE("Mask must be a SBF");
+    }
+
+    // Original bf being copied
+    const SBF* orig = dynamic_cast<SBF*>(o);
+    if (orig == nullptr) {
+        DIE("BF being copied must be a SBF");
+    }
+
+
+    // Checking the assumption that these are same size
+    assert(remove->size() == orig->size());
+
+    //Initialize pointers / masks
+    //sdsl::util::set_random_bits(*(remove->sim));
+    //uint64_t* remove_sim_ptr = remove->sim->data();
+    //uint64_t* remove_dif_ptr = remove->dif->data();
+    uint64_t* orig_sim_ptr = orig->sim->data();
+    //uint64_t remove_sim_mask = 1;
+    //uint64_t orig_sim_mask = 1;
+
+    sdsl::bit_vector* remove_mask = union_bv_fast(*(remove->sim), *(remove->dif));
+    uint64_t* remove_mask_ptr = remove_mask->data();
+    
+    //uint64_t* mask_sim = mask->sim->data();
+    //const uint64_t* acc_dif = accum->dif->data();
+
+    //uint64_t* copy_sim = copy->sim->data();
+
+    sdsl::rank_support_v<> rbv_remove_mask(remove_mask);
+    sdsl::rank_support_v<> rbv_orig_sim(orig->sim);
+    
+    uint64_t remove_total_ones = rbv_remove_mask.rank(remove_mask->size());
+    uint64_t remove_sim_size = remove->sim->size();
+    uint64_t new_sim_size = remove_sim_size - remove_total_ones;
+    std::cerr << "new_sim_size: " << new_sim_size << std::endl;
+    // dif size is based on new sim not old copy. Some of those bits might be removed
+    //uint64_t new_dif_size = mask->sim->size() - mask_total_ones - rbv_copy_sim(copy->sim->size()); 
+    uint64_t new_sim_counter = 0;
+    //uint64_t new_dif_counter = 0;
+ 
+    sim = new sdsl::bit_vector(new_sim_size);
+    //dif = new sdsl::bit_vector(new_dif_size);    
+
+    uint64_t* new_sim_ptr = this->sim->data();
+    //uint64_t* n_dif_data = this->dif->data();
+
+    // XXX: 64 bit mode is disabled for the time being 
+    // ** TRY TO PERFORM AT 64 BIT LEVEL ** 
+    // When it fails, break out of loop and begin single bit iterations
+    sdsl::bit_vector::size_type ulen = remove_sim_size>>6; //64-bit chunks
+    sdsl::bit_vector::size_type up = 0;
+    bool loop64 = false;    
+
+
+    // Test with all 0 remove vector
+    // Test with all 1 remove vector
+    // Can set with sdsl::util::set_one_bits( vector )
+
+    //std::cerr << "In 64_loop" << std::endl;
+    for (;up < ulen && loop64; ++up) {
+        uint64_t num_ones = __builtin_popcountl( (*remove_mask_ptr));
+        //If mask is all 0
+        if (num_ones == 0 && new_sim_counter <= new_sim_size -64){
+            //std::cerr << "All zeros" << std::endl;
+            (*new_sim_ptr++) = (*orig_sim_ptr++);
+            remove_mask_ptr++;
+            new_sim_counter+=64;
+        }
+        //Case where mask is all 1
+        else if (num_ones == 64){
+            //std::cerr << "ALL ones" << std::endl;
+            remove_mask_ptr++;
+            orig_sim_ptr++;
+        }
+        //Case where we have to handle each bit individually
+        else{
+            loop64=false;
+            up--;
+            //std::cerr << new_sim_counter << " " << new_sim_size << std::endl;
+            //std::cerr << "Moving to single bit loop" << std::endl;
+        }
+    }
+    // If we completed loop we are done. Else we have to proceed with 1 bits
+    if (loop64){
+        std::cerr << "completed 64 bit loop" << std::endl;
+        //return; What about dif! We can't return here
+    }
+     
+    const_bit_pointer remove_mask_bptr = remove_mask_ptr;
+    const_bit_pointer orig_sim_bptr = orig_sim_ptr;
+    bit_pointer new_sim_bptr = new_sim_ptr;
+    sdsl::bit_vector::size_type len = remove_sim_size; // inverse of 64-bit level
+    sdsl::bit_vector::size_type p = 0;//up<<6; // up counts in 64-bit land, p counts in bits
+    //std::cerr << up << " " << ulen << std::endl;
+    //std::cerr << p << " " << len << std::endl;
+    for (; (p < len); ++p){
+        if(*remove_mask_bptr++){ //Skip if mask bit is 1
+            (*orig_sim_bptr++);
+        } else{
+            if (new_sim_counter <= new_sim_size){
+                (*new_sim_bptr++) = (*orig_sim_bptr++);
+                new_sim_counter++;
+            } else {
+                DIE("Mask extended beyond allocated sim space.");
+            }
+        }
+    }
+                     
+
+    // If we need dif filter to be processed
+    uint64_t new_dif_counter = 0;
+    sdsl::rank_support_v<> rbv_new_sim(sim);
+    std::cerr << "Num ones in new sim: " << rbv_new_sim(sim->size()) << std::endl;
+    uint64_t new_dif_size = remove->sim->size() - remove_total_ones - rbv_new_sim(sim->size());
+    std::cerr << "new_dif_size: " << new_dif_size << std::endl;
+    uint64_t* orig_dif_ptr = orig->dif->data();
+    dif = new sdsl::bit_vector(new_dif_size);    
+    orig_sim_ptr = orig->sim->data();
+    //new_sim_ptr = this->sim->data();
+    uint64_t* new_dif_ptr = this->dif->data();
+    remove_mask_ptr = remove_mask->data();
+
+    up = 0;
+    bool dif_loop64 = false;
+    for (; up < ulen && dif_loop64; ++up){
+        uint64_t num_ones = __builtin_popcountl( (*remove_mask_ptr));
+        if (num_ones == 64){
+            remove_mask_ptr++;
+            orig_dif_ptr++;
+        } else if ( num_ones == 0 && new_dif_counter <= new_dif_size -64){
+            uint64_t orig_sim_ones = __builtin_popcountl( (*orig_sim_ptr));
+            if (orig_sim_ones == 0){
+                (*new_dif_ptr++) = (*orig_dif_ptr++);
+                remove_mask_ptr++;
+                orig_sim_ones++;
+                new_dif_counter+=64;
+            } else{
+                dif_loop64 = false;
+                up--;
+            }
+        } else {
+            dif_loop64 = false;
+            up--;
+        }
+    }
+
+    if (dif_loop64){
+        return;
+    }
+            
+    remove_mask_bptr = remove_mask_ptr;
+    const_bit_pointer orig_dif_bptr = orig_dif_ptr;
+    orig_sim_bptr = orig_sim_ptr;
+    bit_pointer new_dif_bptr = new_dif_ptr;
+    
+    len = remove_sim_size; // inverse of 64-bit level
+    p=0;//up<<6; // up counts in 64-bit land, p counts in bits
+    
+    for (; (p < len); ++p){
+        if ((*remove_mask_bptr++) | (*orig_sim_bptr++)){
+            (*orig_dif_bptr++);    
+        } else {
+            //std::cerr << "This should happen 50k times." << std::endl; 
+            if(new_dif_counter <= new_dif_size){
+                (*new_dif_bptr++)=(*orig_dif_bptr++);
+                new_dif_counter++;
+            } else{ DIE("New sim extended beyond allocated dif space. (non-zero)");}
+        }
+    }           
+}
+        
+// Case where uint is all 0 (and there's at least 64 bits of space in new sim)
+        // This can occur because mask and new_sim may not be a multiple of 64
+        /* if (num_ones == 0 && new_sim_counter < new_sim_size - 64){
+            uint64_t copy_ones = __builtin_popcountl( (*copy_sim));
+            if (copy_ones == 0 && new_dif_counter < new_dif_size -64){
+                (*n_dif_data++) = (*copy_dif++);
+                (*n_sim_data++) = (*copy_sim++);
+                new_dif_counter+=64;
+                new_sim_counter+=64;
+                mask_sim++;
+            } else {
+                // we repeat the same steps as the else case but just for the difference
+                // we also ignore mask because its zero here
+                const_bit_pointer csptr = copy_sim;
+                const_bit_pointer cdptr = copy_dif;
+                bit_pointer ndptr = n_dif_data;
+                bit_pointer nsptr = n_sim_data;
+                //We can copy sim as a uint64 but cant increment because we are using bits
+                //(*n_sim_data) = (*copy_sim);
+                //new_sim_counter+=64;
+
+                for(int i = 0; i < 64; ++i){
+                    (*nsptr) = (*csptr);
+                    if(*nsptr){} else {
+                        if(new_dif_counter < new_dif_size){
+                            (*ndptr++) = (*cdptr++);
+                            new_dif_counter++;
+                        } else{
+                            DIE("Copy sim extended beyond allocated dif space.");
+                        }
+                    }
+                    nsptr++;
+                }
+                
+            }
+        */
+/*
+                const_bit_pointer cdptr = copy_dif;
+                bit_pointer nsptr = n_sim_data;
+                bit_pointer ndptr = n_dif_data;
+
+                // THIS WORKS BUT DOESNT MOVE THE UINT POSITIONS
+
+                for(int i = 0; i < 64; ++i){
+                    if (*nsptr++){} else { // ==0 // ~(not operator) not working
+                        if(new_dif_counter < new_dif_size){
+                            (*ndptr++)=(*cdptr++);
+                            new_dif_counter++;
+                        } else{ DIE("New sim extended beyond allocated dif space. (zero mask)");}
+                    }
+                }
+            }
+
+*/
+
 SBF::~SBF() {
     // call to base destructor happens automatically
     if (sim != nullptr) {
@@ -692,8 +965,8 @@ std::string SBF::get_dif_name(){
 
 void SBF::load() {
     // read the actual bits
-    assert(sim == nullptr);
-    assert(dif == nullptr);
+    //assert(sim == nullptr);
+    //assert(dif == nullptr);
     
     sim = new sdsl::bit_vector();
     std::string fn = this->get_sim_name();    
@@ -720,8 +993,17 @@ void SBF::save() {
 uint64_t SBF::size() const {
     uint64_t sim_size = sim->size();
     //uint64_t dif_size = dif->size();
-    assert(sim_size == dif->size());
+    //assert(sim_size == dif->size());
     return sim_size;
+}
+
+uint64_t SBF::size(int type) const{
+    if (type == 0){
+        return sim->size();
+    } else if (type == 1){
+        return dif->size();
+    } 
+    DIE("Only two filter types (sim = 0, dif = 1)");
 }
 
 int SBF::operator[](uint64_t pos) const {
@@ -799,6 +1081,71 @@ void SBF::union_into(const BF* f2, int type){
     DIE("Not yet implemented (SBF)");
 }
 
+// Only used for remove_bf in compression - maybe make its own type of BF?
+// remove_bf really only needs its bloom filter (and this operation)
+// Update mask uses one filter to add to mask 
+void SBF::update_mask(const BF* u){ //, int type){
+    std::cerr << "Updating mask with new filter: " << u->get_name() << std::endl;
+    const SBF* update = dynamic_cast<const SBF*>(u);
+    if (update == nullptr){
+        DIE("update_mask uses both sim and dif filter");
+    }
+
+    uint64_t* remove_sim_ptr = this->sim->data();
+    uint64_t* remove_dif_ptr = this->dif->data();
+
+    uint64_t* debug=0;
+    const uint64_t* update_sim_ptr = update->sim->data();
+    const uint64_t* update_dif_ptr = update->dif->data();
+    sdsl::bit_vector::size_type len = size()>>6;
+    //std::cerr << "Pre-loop" << std::endl;
+//    if(type == 0){ //add to mask 
+        for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+            //(*debug) = (*remove_sim_ptr) | (*update_sim_ptr) | ~(*update_dif_ptr);
+
+            //This order should not matter. For safety putting dif calculation first.
+            (*remove_dif_ptr) = ~((*update_sim_ptr) | (*update_dif_ptr) | (*update_sim_ptr));
+            (*remove_sim_ptr) = (*remove_sim_ptr) | (*update_sim_ptr);
+            //if ( (*debug) != ((*remove_sim_ptr) | (*remove_dif_ptr)) ){
+            //    DIE("Bit operations not correct.");
+            //}
+
+            remove_sim_ptr++; remove_dif_ptr++;
+            update_sim_ptr++; update_dif_ptr++;
+        }
+}
+
+// When removing bits we need to know both the node being removed and its parent's other child
+void SBF::update_mask(const BF* u1, const BF* u2){
+    std::cerr << "Updating mask with two children: " << u1->get_name() << " " << u2->get_name() << std::endl;
+    const SBF* update_child = dynamic_cast<const SBF*>(u1);
+    if (update_child == nullptr){
+        DIE("update_mask uses both sim and dif filter");
+    }
+
+    const SBF* other_child = dynamic_cast<const SBF*>(u2);
+    if (other_child == nullptr){
+        DIE("update2 uses both sim and dif filter");
+    }
+
+    uint64_t* remove_sim_ptr = this->sim->data();
+    uint64_t* remove_dif_ptr = this->dif->data();
+
+    const uint64_t* update_sim_ptr = update_child->sim->data();
+    //const uint64_t* update_dif_ptr = update_child->dif->data(); If mask has a 1 bit, update_dif has to be 0.
+    const uint64_t* other_sim_ptr = other_child->sim->data();
+    const uint64_t* other_dif_ptr = other_child->dif->data();
+
+    sdsl::bit_vector::size_type len = size()>>6;
+    for (sdsl::bit_vector::size_type p = 0; p < len; ++p){
+        (*remove_sim_ptr) = (*remove_sim_ptr) ^ (*update_sim_ptr);
+        (*remove_dif_ptr) = (*remove_dif_ptr) & ~(*other_sim_ptr) & ~(*other_dif_ptr);
+        remove_sim_ptr++; remove_dif_ptr++;
+        update_sim_ptr++; 
+        other_sim_ptr++; other_dif_ptr++;
+    }
+}
+
 // Similarity could mean something different for SBF versus BF but right now it doesnt.
 // This function simply is adapted to compare xor and or by combining dif and sim
 
@@ -808,7 +1155,7 @@ uint64_t SBF::similarity(const BF* other, int type) const {
     assert(other->size() == size());
 
     const uint64_t* b1_sim_data = this->sim->data();
-    const uint64_t* b1_dif_data = this->dif->data();
+    //const uint64_t* b1_dif_data = this->dif->data();
 
     const SBF* o = dynamic_cast<const SBF*>(other);
     if (o == nullptr) {
@@ -816,9 +1163,12 @@ uint64_t SBF::similarity(const BF* other, int type) const {
     }
 
     const uint64_t* b2_sim_data = o->sim->data();
-    const uint64_t* b2_dif_data = o->dif->data();
+    //const uint64_t* b2_dif_data = o->dif->data();
 
     if (type == 1) {
+        const uint64_t* b1_dif_data = this->dif->data();
+        const uint64_t* b2_dif_data = o->dif->data();
+        // FRACTION OF SHARED ONES IN SIM OR DIF
 		uint64_t xor_count = 0;
 	   	uint64_t or_count = 0;
         //std::cerr << "Type 1 Similarity!" << std::endl;
@@ -834,8 +1184,33 @@ uint64_t SBF::similarity(const BF* other, int type) const {
   	  	}
    
     	return uint64_t(float(or_count - xor_count) / float(or_count) * size() );
-	}
+	} else if (type == 2) {
+        uint64_t sim_count = 0;
+        sdsl::bit_vector::size_type len = size()>>6;
+        for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+            sim_count += __builtin_popcountl( (*b1_sim_data) & (*b2_sim_data) );
+            b1_sim_data++;
+            b2_sim_data++;
+        } 
+        if (sim_count > 0){ //If anything is similar, sim vector is size.
+            return sim_count * size();
+        }
+
+        // else we look at difference
+        b2_sim_data = this->sim->data();
+        const uint64_t* b1_dif_data = this->dif->data();
+        uint64_t dif_count = 0;
+        for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+            dif_count += __builtin_popcountl( (*b1_dif_data) ^ (*b2_sim_data) );
+            b1_dif_data++;
+            b2_sim_data++; 
+        }
+        return size()-dif_count; 
+    }
+    // SHOULD ADD SIMILARITY ONLY METRIC AND DIFFERENCE ONLY METRIC (2 and 3) - if 2 is 0 then 3.
 	else if (type == -1) { // XXX: This is primed to be deleted but placeholder for now
+        const uint64_t* b1_dif_data = this->dif->data();
+        const uint64_t* b2_dif_data = o->dif->data();
 		uint64_t count = 0;
 		sdsl::bit_vector::size_type len = size()>>6;
                 for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
@@ -849,8 +1224,11 @@ uint64_t SBF::similarity(const BF* other, int type) const {
 		return size() - count;
 	} else if (type == 0) {
         //std::cerr << "Default Similarity!" << std::endl;
+        const uint64_t* b1_dif_data = this->dif->data();
+        const uint64_t* b2_dif_data = o->dif->data();
  		uint64_t count = 0;
 		sdsl::bit_vector::size_type len = size()>>6;
+        std::cerr << len << std::endl;
         for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
             count += __builtin_popcountl( ((*b1_sim_data) | (*b1_dif_data)) ^ ((*b2_sim_data) | (*b2_dif_data)));
             b1_sim_data++;
@@ -923,8 +1301,8 @@ uint64_t SBF::count_ones() const {
 uint64_t SBF::count_ones(int type) const {
     // sim type ==0
     if (type == 0) {
-        uint64_t* sim_data = sim->data();
-        sdsl::bit_vector::size_type len = size()>>6;
+        /*uint64_t* sim_data = sim->data();
+        sdsl::bit_vector::size_type len = size(0)>>6;
         uint64_t count_sim=0;
         for (sdsl::bit_vector::size_type p =0; p < len; ++p) {
             int pc = popcount(*sim_data);
@@ -932,22 +1310,24 @@ uint64_t SBF::count_ones(int type) const {
             sim_data++;
             count_sim += pc;
         }
+        */
         sdsl::rank_support_v<> rbv(sim);
-        DIE_IF(rbv.rank(size()) != count_sim, "SDSL and us disagree about number of 1s (dif)");
-        return count_sim;
+        //DIE_IF(rbv.rank(size()) != count_sim, "SDSL and us disagree about number of 1s (dif)");
+        return rbv.rank(size(0));//count_sim;
     } else if (type == 1) {
+        /*
         uint64_t* dif_data = dif->data();
-        sdsl::bit_vector::size_type len = size()>>6;
+        sdsl::bit_vector::size_type len = size(1)>>6;
         uint64_t count_dif=0;
         for (sdsl::bit_vector::size_type p =0; p < len; ++p) {
             int pc = popcount(*dif_data);
-            DIE_IF(pc != __builtin_popcountl(*dif_data), "pocountl and us disagree about popcount (dif)");
+            //DIE_IF(pc != __builtin_popcountl(*dif_data), "pocountl and us disagree about popcount (dif)");
             dif_data++;
             count_dif += pc;
-        }
+        }*/
         sdsl::rank_support_v<> rbv(dif);
-        DIE_IF(rbv.rank(size()) != count_dif, "SDSL and us disagree about number of 1s (dif)");
-        return count_dif;
+        //DIE_IF(rbv.rank(size(1)) != count_dif, "SDSL and us disagree about number of 1s (dif)");
+        return rbv.rank(size(1));//count_dif;
     }
     DIE("Invalid type specified!");
     return -1;
@@ -964,6 +1344,13 @@ void SBF::compress() {
 		std::cerr << "Compressed RRR diff vector is " << sdsl::size_in_mega_bytes(rrr_dif) << std::endl;
         sdsl::store_to_file(rrr_dif, this->get_dif_name()+".rrr");
     }
+}
+
+void SBF::compress(BF* rm){
+    std::string fn = this->get_sim_name();
+    SBF* comp_bf = new SBF(fn, rm, this);
+    comp_bf->compress();
+    delete comp_bf;
 }
 
 // Takes in f2 (parent filter in standard use-case)
@@ -1134,6 +1521,17 @@ bool SBF::contains(const jellyfish::mer_dna & m, int type) const {
         } else {
             DIE("Error - only sim/dif filter 'types'!");
         }
+    }
+    return true;
+}
+
+bool SBF::contains(const size_t pos, int type) const {
+    if(type == 0){
+        if ((*sim)[pos] == 0) return false;
+    } else if (type == 1){
+        if ((*dif)[pos] == 0) return false;
+    } else {
+        DIE("Error - only sim/dif filter 'types'!");
     }
     return true;
 }

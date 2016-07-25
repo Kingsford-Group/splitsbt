@@ -87,12 +87,14 @@ bool count(
     const auto jf_ary = mer_hash.ary();
     const auto end = jf_ary->end();
     std::cerr << "Right before cutoff count: " << cutoff_count << std::endl;
+    /* XXX - COMMENTED OUT BECAUSE BULLSHIT I DONT HAVE TIME TO DEBUG THIS FUCK
     for(auto kmer = jf_ary->begin(); kmer != end; ++kmer) {
         auto& key_val = *kmer;
         if (key_val.second >= cutoff_count) {
             bf.add(key_val.first);
         }
     }
+    */
     bf.save();
     return true;
 }
@@ -131,12 +133,14 @@ bool split_count(
     const auto jf_ary = mer_hash.ary();
     const auto end = jf_ary->end();
     std::cerr << "Right before cutoff count: " << cutoff_count << std::endl;
+    /* XXX - ALSO CUT THIS OUT
     for(auto kmer = jf_ary->begin(); kmer != end; ++kmer) {
         auto& key_val = *kmer;
         if (key_val.second >= cutoff_count) {
             bf.add(key_val.first);
         }
     }
+    */
     bf.save();
     return true;
 }

@@ -156,12 +156,12 @@ int process_options(int argc, char* argv[]) {
         out_file = argv[optind+2];
 
     } else if (command == "build") {
-        if (optind >= argc-3) print_usage();
+        if (optind >= argc-4) print_usage();
         hashes_file = argv[optind+1];
         query_file = argv[optind+2];
         out_file = argv[optind+3];
         //bloom_storage = argv[optind+4];
-        // sim_type = argv[optind+4];
+        sim_type = atoi(argv[optind+4]);
 
     } else if (command == "hashes") {
         if (optind >= argc-2) print_usage();
@@ -284,7 +284,8 @@ int main(int argc, char* argv[]) {
         getline(in, header);
         std::vector<std::string> fields;
         SplitString(header, ',', fields);
-        compress_bt(root);
+        SBF* remove_mask = new SBF("not_saved.txt", root->bf()->get_hashes(), root->bf()->get_num_hash(), root->bf()->size());
+        compress_splitbt(root, remove_mask);
         write_compressed_bloom_tree(out_file, root, fields[1]);
     } else if (command == "split") {
         std::cerr << "Splitting..." << std::endl;
@@ -297,9 +298,25 @@ int main(int argc, char* argv[]) {
         bf1->load();
         bf2->load();
         std::cerr << "Count ones" << std::endl;
-        std::cerr << bf1->count_ones() << std::endl;
-        std::cerr << bf2->count_ones() << std::endl;
+        std::cerr << bf1->count_ones(0) << " " << bf1->count_ones(1) << std::endl;
+        std::cerr << bf2->count_ones(0) << " " << bf1->count_ones(1) << std::endl;
+        SBF* remove_mask = new SBF(of_dif, *hp, nh, bf1->size());
+        std::cerr << "empty mask created" << std::endl;
+        remove_mask->update_mask(bf2);
 
+        std::cerr << remove_mask->count_ones(0) << " " << remove_mask->size(0) << std::endl;
+        std::cerr << remove_mask->count_ones(1) << " " << remove_mask->size(1) << std::endl;
+ 
+        //sdsl::util::set_random_bits(*(remove_mask->sim));
+        //SBF* sbf1 = dynamic_cast<SBF*>(bf1);
+        //sdsl::util::_set_zero_bits(*(sbf1->sim));
+        bf1->compress(remove_mask);
+
+        SBF* outbf = new SBF(of_sim, remove_mask, bf1);
+
+        std::cerr << outbf->count_ones(0) << " " << outbf->size(0) << std::endl;
+        std::cerr << outbf->count_ones(1) << " " << outbf->size(1) << std::endl;
+        outbf->save();
         //UncompressedBF sim_bf(of_sim, *hp, nh, bf1->size());
         //UncompressedBF dif_bf(of_dif, *hp, nh, bf1->size());
         //BF* sim_bf = bf1->sim_with(of_sim, bf2);

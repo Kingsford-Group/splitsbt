@@ -75,6 +75,46 @@ void compress_bt(BloomTree* root) {
 	}
 }
 
+void compress_splitbt(BloomTree* root, BF* rbf){
+    if (root == nullptr) return;
+   
+    //SplitBloomTree* - We might not need to dynamic cast this
+ 
+    SBF* remove_bf = dynamic_cast<SBF*>(rbf);
+    if (remove_bf == nullptr){
+        DIE("remove_bf doesn't really need to be SBF but it is for now.");
+    }
+    
+    //compress
+    root->bf()->compress(remove_bf);
+
+    //add current, compress children
+    remove_bf->update_mask(root->bf());
+    
+    if(root->child(0)){
+        compress_splitbt(root->child(0), remove_bf);
+    }
+    if(root->child(1)){
+        compress_splitbt(root->child(1), remove_bf);
+    }
+    
+    //remove current
+    if (root->get_parent() != nullptr){
+        if (root->name() == root->get_parent()->child(0)->name()){
+            remove_bf->update_mask(root->bf(), root->get_parent()->child(1)->bf());
+        } else {
+            assert(root->get_parent()->child(1)->name()==root->name());
+            remove_bf->update_mask(root->bf(), root->get_parent()->child(0)->bf());
+        }
+    }
+ 
+    //remove_bf->update_mask(root, 0);
+    //root->bf()->compress
+    
+    // There's no reason why this has to be an SBF. Should change it if time today
+    //BF* remove_bf = new SBF("notsaved.txt", root->bf()->get_hashes(), root->bf()->get_num_hash(), root->bf()->size());
+}
+
 bool query_passes(BloomTree* root, const std::set<jellyfish::mer_dna> & q) {
     assert(q.size() > 0);
     auto bf = root->bf();
@@ -91,7 +131,7 @@ bool query_passes(BloomTree* root, const std::set<jellyfish::mer_dna> & q) {
 // return true if the filter at this node contains > QUERY_THRESHOLD kmers
 bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::mer_dna> & q) {
     float weight = 1.0;
-    assert(q.size() > 0);
+    //assert(q.size() > 0);
     auto bf = root->bf();
     float c = 0;
     unsigned n = 0;
@@ -421,7 +461,7 @@ void batch_query_from_file(
     while (getline(in, line)) {
         line = Trim(line);
         if (line.size() < jellyfish::mer_dna::k()) continue;
-        qs.emplace_back(new QueryInfo(line));
+        qs.emplace_back(new QueryInfo(root->bf(), line));
         n++;
     }
     in.close();
@@ -458,7 +498,7 @@ void batch_weightedquery_from_file(
 	wfline = Trim(wfline);
 	
         if (line.size() < jellyfish::mer_dna::k()) continue;
-        qs.emplace_back(new QueryInfo(line, wfline));
+        qs.emplace_back(new QueryInfo(root->bf(), line, wfline));
         n++;
     }
     in.close();
@@ -488,7 +528,7 @@ void leaf_query_from_file(
 	while (getline(in, line)) {
 		line = Trim(line);
 		if (line.size() < jellyfish::mer_dna::k()) continue;
-		qs.emplace_back(new QueryInfo(line));
+		qs.emplace_back(new QueryInfo(root->bf(), line));
 		n++;
 	}
 	in.close();
@@ -502,3 +542,35 @@ void leaf_query_from_file(
 		delete p;
 	}
 }
+
+// This assumes num_hashes is one and stores the direct size_t position.
+// **More accurate to say it scales with num_hashes but is inefficient if num_hashes > 1
+// The alternative would be to store two size_t values (base and inc) [more efficient than many size_t]
+std::vector<size_t> vector_hash_conversion(BF* root, std::vector<jellyfish::mer_dna> v){
+    HashPair hashes = root->get_hashes();
+    unsigned long num_hash = root->get_num_hash();
+    uint64_t size = root->size();
+
+    std::vector<size_t> out(v.size()*num_hash);
+
+    uint64_t index=0;
+    for (size_t i=0; i<v.size(); i++){
+        jellyfish::mer_dna m = v[i];
+        m.canonicalize();
+        uint64_t h0 = hashes.m1.times(m);
+        uint64_t h1 = hashes.m2.times(m);
+        size_t base = h0 % size;
+        size_t inc = h1 % size;
+        for (unsigned long j = 0; j < num_hash; ++j){
+            const size_t pos = (base + j * inc) % size;
+            out[index]=pos;
+            index++;
+        }
+    }
+    if (index != out.size()){
+        DIE("Index mismatch with output vector");
+    }
+
+    return out;
+}
+
