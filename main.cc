@@ -185,6 +185,13 @@ int process_options(int argc, char* argv[]) {
         bvfile2 = argv[optind+3];
         of_sim = argv[optind+4];
         of_dif = argv[optind+5];
+    } else if (command == "stealthq"){
+        if (optind >= argc-5) print_usage();
+        hashes_file = argv[optind+1];
+        bvfile1=argv[optind+2];
+        bvfile2=argv[optind+3];
+        query_file=argv[optind+4];
+        out_file = argv[optind+5];
     } else if (command == "sbtconvert") {
         if (optind >= argc-2) print_usage();
         bloom_tree_file=argv[optind+1];
@@ -326,7 +333,40 @@ int main(int argc, char* argv[]) {
         
         //sim_bf->save();
         //dif_bf->save();
+    } else if (command == "stealthq"){
+        int nh;
+        HashPair* hp = get_hash_function(hashes_file, nh);
+        //BF* bf1 = load_bf_from_file(bvfile1, *hp, nh);
+        //BF* bf2 = load_bf_from_file(bvfile2, *hp, nh);
+        //bf1->load();
+        //bf2->load();
 
+        //std::cerr << bf1->size(0) << " " << bf1->size(1) << std::endl;
+        //std::cerr << bf2->size(0) << " " << bf2->size(1) << std::endl;
+
+        SBF* bf1 = new SBF(bvfile1, *hp, nh, 64);
+        //BF* bf2 = SBF(bvfile2, *hp, nh, 64);
+
+        bf1->print();
+        uint64_t* bf1_sim=bf1->sim->data();
+        (*bf1_sim)=0xAAAAAAAAAAAAAAAA;
+        uint64_t* bf1_dif=bf1->dif->data();
+        (*bf1_dif)=0x5555555555555555;
+
+        bf1->print();
+
+  //      std::srand(std::time(0));
+
+/*
+        for (int i = 0; i < 100000; i++){
+            uint64_t randpos = static_cast <uint64_t> (static_cast <float> (std::rand()) / static_cast <float> (RAND_MAX)*bf1->size());
+            if (bf1->contains(randpos,0) != bf2->contains(randpos,0)){
+                std::cerr << bf1->contains(randpos,0) << " " << bf2->contains(randpos,0) << " " << randpos << std::endl;
+            } else if (bf1->contains(randpos,1) != bf2->contains(randpos,1)){
+                std::cerr << bf1->contains(randpos,1) << " " << bf2->contains(randpos,1) << " " << randpos << std::endl;
+            }
+        }
+*/
     } else if (command == "sbtconvert"){
         std::cerr << "Loading bloom tree topology: " << bloom_tree_file
             << std::endl;

@@ -112,6 +112,11 @@ uint64_t BF::size() const {
     return bits->size();
 }
 
+uint64_t BF::size(int type) const{
+    DIE("No type in standard BF");
+    return 0;
+}
+
 HashPair BF::get_hashes() const {
     return hashes;
 }
@@ -267,6 +272,10 @@ void BF::update_mask(const BF* u1, const BF* u2){
     DIE("not implemented.");
 }
 
+void BF::print(){
+    DIE("not implemented.");
+}
+
 /*
 compressed Split Bloom Filter
 */
@@ -327,12 +336,29 @@ void compressedSBF::save() {
 }
 
 uint64_t compressedSBF::size() const{
-    assert(sim_bits->size()==dif_bits->size());
     return sim_bits->size();
 }
 
+uint64_t compressedSBF::size(int type) const{
+    if (type == 0){
+        return sim_bits->size();
+    } else if (type == 1){
+        return dif_bits->size();
+    }
+    DIE("Only two filter types (sim = 0, dif = 1)");
+}
+
+
 int compressedSBF::operator[](uint64_t pos) const{
-    return (*sim_bits)[pos] | (*dif_bits)[pos];
+    bool contains = (*sim_bits)[pos];
+    if (contains){
+        return contains;
+    }
+
+    sdsl::rank_support_rrr<1, 255> rbv_sim(sim_bits);   
+    uint64_t offset = rbv_sim.rank(pos);
+    assert(pos-offset >= 0);
+    return (*dif_bits)[pos-offset];
 }
 
 bool compressedSBF::contains(const jellyfish::mer_dna & m, int type) const {
@@ -348,6 +374,7 @@ bool compressedSBF::contains(const jellyfish::mer_dna & m, int type) const {
     
     const size_t base = h0 % size();
     const size_t inc = h1 % size();
+    sdsl::rank_support_rrr<1, 255> rbv_sim(sim_bits);
 
     for (unsigned long i = 0; i < num_hash; ++i) {
         const size_t pos = (base + i * inc) % size();
@@ -355,7 +382,9 @@ bool compressedSBF::contains(const jellyfish::mer_dna & m, int type) const {
         if(type == 0){
             if ((*sim_bits)[pos] == 0) return false;
         } else if (type == 1){
-            if ((*dif_bits)[pos] == 0) return false;
+            uint64_t offset = rbv_sim.rank(pos);
+            assert(pos-offset>=0);
+            if ((*dif_bits)[pos-offset] == 0) return false;
         } else {
             DIE("Error - only sim/dif filter 'types'!");
         }
@@ -367,7 +396,10 @@ bool compressedSBF::contains(const size_t pos, int type) const{
     if(type == 0){
         if ((*sim_bits)[pos] == 0) return false;
     } else if (type == 1){
-        if ((*dif_bits)[pos] == 0) return false;
+        sdsl::rank_support_rrr<1, 255> rbv_sim(sim_bits);
+        size_t offset = rbv_sim.rank(pos);
+        assert(pos>= offset);
+        if ((*dif_bits)[pos-offset] == 0) return false;
     } else {
         DIE("Error - only sim/dif filter 'types'!");
     }
@@ -379,6 +411,25 @@ bool compressedSBF::contains(const size_t pos, int type) const{
 // XXX: should probably clean that up once we get a stable build going
 bool compressedSBF::contains(const std::string & str, int type) const {
     return contains(jellyfish::mer_dna(str), type);
+}
+
+//For debugging SMALL bit vectors as part of test suite
+void compressedSBF::print(){
+    std::string sim_out(size(0),'0');
+    std::string dif_out(size(1),'0');
+    
+    for(size_t i =0; i < size(0); i++){
+        if(contains(i,0)){
+            sim_out[size(0)-1-i]='1';
+        }
+    }
+    for(size_t i=0; i<size(1);i++){
+        if(contains(i,1)){
+            dif_out[size(1)-1-i]='1';
+        }
+    }
+    std::cerr << sim_out << std::endl;
+    std::cerr << dif_out << std::endl; 
 }
 
 /*
@@ -875,12 +926,14 @@ SBF::SBF(const std::string & f, BF* rm, BF* o) :
             (*orig_dif_bptr++);    
         } else {
             //std::cerr << "This should happen 50k times." << std::endl; 
-            if(new_dif_counter <= new_dif_size){
+            if(new_dif_counter < new_dif_size){
                 (*new_dif_bptr++)=(*orig_dif_bptr++);
                 new_dif_counter++;
             } else{ DIE("New sim extended beyond allocated dif space. (non-zero)");}
         }
-    }           
+    }
+    assert(new_dif_counter == new_dif_size);
+    std::cerr << "Check dif_counter: " << new_dif_counter << std::endl; 
 }
         
 // Case where uint is all 0 (and there's at least 64 bits of space in new sim)
@@ -1098,14 +1151,28 @@ void SBF::update_mask(const BF* u){ //, int type){
     const uint64_t* update_sim_ptr = update->sim->data();
     const uint64_t* update_dif_ptr = update->dif->data();
     sdsl::bit_vector::size_type len = size()>>6;
+
+/*
+    sdsl::rank_support_v<> rbv_sim(sim);
+    sdsl::rank_support_v<> rbv_dif(dif);
+    std::cerr << "Before\n";
+    std::cerr << "sim_ones: " << rbv_sim(sim->size()) << " " << sim->size() << std::endl;
+    std::cerr << "dif_ones: " << rbv_dif(dif->size()) << " " << dif->size() << std::endl;
+    sdsl::rank_support_v<> rbv_us(update->sim);
+    sdsl::rank_support_v<> rbv_ud(update->dif);
+    std::cerr << "usim_ones: " << rbv_us(update->sim->size())<< " " << update->sim->size() <<std::endl;
+    std::cerr << "udif_ones: " << rbv_ud(update->dif->size())<< " " << update->dif->size() << std::endl;
+*/
     //std::cerr << "Pre-loop" << std::endl;
 //    if(type == 0){ //add to mask 
         for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
             //(*debug) = (*remove_sim_ptr) | (*update_sim_ptr) | ~(*update_dif_ptr);
 
             //This order should not matter. For safety putting dif calculation first.
-            (*remove_dif_ptr) = ~((*update_sim_ptr) | (*update_dif_ptr) | (*update_sim_ptr));
+            //Putting sim first to make sure that sim and dif can never both be 1
             (*remove_sim_ptr) = (*remove_sim_ptr) | (*update_sim_ptr);
+            (*remove_dif_ptr) = ~((*remove_sim_ptr) | (*update_dif_ptr));
+            assert(((*remove_sim_ptr) & (*remove_dif_ptr)) == 0);
             //if ( (*debug) != ((*remove_sim_ptr) | (*remove_dif_ptr)) ){
             //    DIE("Bit operations not correct.");
             //}
@@ -1113,6 +1180,19 @@ void SBF::update_mask(const BF* u){ //, int type){
             remove_sim_ptr++; remove_dif_ptr++;
             update_sim_ptr++; update_dif_ptr++;
         }
+
+/*
+    std::cerr << "After\n";
+    sdsl::rank_support_v<> rbv_sim2(sim);
+    sdsl::rank_support_v<> rbv_dif2(dif);
+    std::cerr << "sim_ones: " << rbv_sim2(sim->size()) << " " << sim->size() << std::endl;
+    std::cerr << "dif_ones: " << rbv_dif2(dif->size()) << " " << dif->size() << std::endl;
+    sdsl::rank_support_v<> rbv_us2(update->sim);
+    sdsl::rank_support_v<> rbv_ud2(update->dif);
+    std::cerr << "usim_ones: " << rbv_us2(update->sim->size())<< " " << update->sim->size() <<std::endl;
+    std::cerr << "udif_ones: " << rbv_ud2(update->dif->size())<< " " << update->dif->size() << std::endl;
+  */  
+
 }
 
 // When removing bits we need to know both the node being removed and its parent's other child
@@ -1542,6 +1622,25 @@ bool SBF::contains(const size_t pos, int type) const {
 bool SBF::contains(const std::string & str, int type) const {
     return contains(jellyfish::mer_dna(str), type);
 }
+
+void SBF::print(){
+    std::string sim_out(size(0),'0');
+    std::string dif_out(size(1),'0');
+    
+    for(size_t i =0; i < size(0); i++){
+        if(contains(i,0)){
+            sim_out[size(0)-1-i]='1';
+        }
+    }
+    for(size_t i=0; i<size(1);i++){
+        if(contains(i,1)){
+            dif_out[size(1)-1-i]='1';
+        }
+    }
+    std::cerr << sim_out << std::endl; 
+    std::cerr << dif_out << std::endl;
+}
+
 
 /*
 Misc Code elements

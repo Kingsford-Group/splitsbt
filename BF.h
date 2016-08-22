@@ -24,6 +24,7 @@ public:
     virtual int operator[](uint64_t pos) const;
     virtual void set_bit(uint64_t p);
     virtual uint64_t size() const;
+    virtual uint64_t size(int type) const;
 
     virtual std::string get_name() const;
     virtual HashPair get_hashes() const;
@@ -57,6 +58,7 @@ public:
     
     virtual void update_mask(const BF* update);
     virtual void update_mask(const BF* u1, const BF* u2);
+    virtual void print();
     // Things which are not used in all cases but were added to save time in interface
 protected:
     std::string filename;
@@ -78,14 +80,16 @@ public:
     virtual std::string get_dif_name();
 
     virtual uint64_t size() const;
+    virtual uint64_t size(int type) const;
 
     virtual int operator[](uint64_t pos) const;
 
     virtual bool contains(const jellyfish::mer_dna & m, int type) const;
     virtual bool contains(const size_t pos, int type) const;
     bool contains(const std::string & str, int type) const;
+    virtual void print();
 
-protected:
+//protected:
     sdsl::rrr_vector<255>* sim_bits;
     sdsl::rrr_vector<255>* dif_bits;
 };
@@ -176,9 +180,12 @@ public:
 
     virtual void update_mask(const BF* update);
     virtual void update_mask(const BF* u1, const BF* u2);
+    virtual void print();
     //virtual bool contains(const jellyfish::mer_dna & m, int type) const;
     //bool contains(std::string str, int type) const;
-protected:
+
+//Have to remove protected to directly manipulate bit vectors for testing
+//protected:
     sdsl::bit_vector* sim;
     sdsl::bit_vector* dif;
 };

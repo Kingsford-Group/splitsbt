@@ -139,7 +139,6 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
 
     SplitBloomTree* sroot = dynamic_cast<SplitBloomTree*>(root);
     if (sroot == nullptr) { // start of normal query
-
     if (q->weight.empty()){
 	    weighted=0;
     } else { weighted = 1; }
@@ -171,6 +170,14 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
             //if (q->matched_kmers >= QUERY_THRESHOLD * q->total_kmers){
             //    return true;
             //}
+            //std::cerr << i << " " << q->tail_index << std::endl;
+            compressedSBF* cbf = dynamic_cast<compressedSBF*>(bf);
+            if (m > cbf->size(0)){
+                std::cerr << "Tail Index: " << i << " " << q->tail_index << std::endl;
+               std::cerr << m << " " << cbf->size(0) << " " << cbf->size(1) << std::endl;
+                DIE("Hash value out of bounds");
+            }
+        
             if (bf->contains(m,0)) { //kmer found in similarity filter
                 q->matched_kmers+=weight; //record the hit (weighted for future weighted functionality)
                 swap_kmer_position(q->query_kmers,i, q->tail_index);
@@ -321,14 +328,16 @@ void query_batch(BloomTree* root, QuerySet & qs) {
         }
     } else { //Right now we have two general query types.
         QuerySet pass;
-        QuerySet copy;
+        //QuerySet copy;
         unsigned n = 0;
-        //std::cerr << "Split Bloom Tree" << std::endl;
+        std::cerr << "Split Bloom Tree " << root->bf()->get_name() << std::endl;
         bool has_children = root->child(0) || root->child(1);
-
         for (auto & q : qs) {
             //If query has enough matched kmers (from sim), don't waste time searching
+            std::cerr << "TAIL INDEX: " << q->tail_index << std::endl;
+            std::cerr << q->matched_kmers << " " << q->total_kmers * QUERY_THRESHOLD << std::endl;
             if (q->matched_kmers >= QUERY_THRESHOLD * q->total_kmers){
+                /// XXX: We should add a flag here to not perform spuriously when we aren't 'querying' anymore
                 //std::cerr << "Skipped search (enough similar kmers already found)" << std::endl;
                 if (has_children) {
                     pass.emplace_back(q);
@@ -337,6 +346,7 @@ void query_batch(BloomTree* root, QuerySet & qs) {
                     n++;
                 }
             } else if (query_passes(root, q)) { //q->query_kmers)) {
+                //std::cerr << "Query passes \n";
                 if (has_children) {
                     pass.emplace_back(q);
                     //copy.emplace_back(QueryInfo(*q));
@@ -352,11 +362,41 @@ void query_batch(BloomTree* root, QuerySet & qs) {
         //Each node is storing the query_kmers and # matching at that position
         std::vector<int> mk_vector; //matched_kmers
         std::vector<int> ti_vector; //tail_index
+        std::vector<std::vector<size_t>> query_vector;
         //std::vector<std::set<jellyfish::mer_dna>> qk_vector;
         //std::vector<std::string> qs_vector;
+
+        // *** Adjust position values based on current filter ***
+        // Root is always current filter
+       
+        compressedSBF* cbf = dynamic_cast<compressedSBF*>(sroot->bf());
+        if (cbf == nullptr){
+            DIE("Add cases later to clean this up");
+        }
+        std::cerr << pass.size() << std::endl;
+
+        sdsl::rank_support_rrr<1,255> rbv_sim(cbf->sim_bits);
+        sdsl::rank_support_rrr<0,255> rbv_dif(cbf->dif_bits);
+
+        // Everything in pass was a hit match in the dif. 
+        // A hit match in the sim is recorded by tail_index and matched_kmer
+
         for (auto qc : pass) {
             mk_vector.emplace_back(qc->matched_kmers);
             ti_vector.emplace_back(qc->tail_index);
+            query_vector.emplace_back(qc->query_kmers);
+            std::cerr << "Internal loop TAIL INDEX: " << qc->tail_index << std::endl;
+            for (int i = 0; i <= qc->tail_index; i++) {
+                auto m = qc->query_kmers[i];
+               
+                assert(m <= cbf->size(0)); 
+                size_t sim_ones = rbv_sim(m);
+                assert(m-sim_ones <= cbf->size(1));
+                size_t dif_ones = rbv_dif(m-sim_ones);
+                qc->query_kmers[i]=m-sim_ones-dif_ones;
+                
+                //std::cerr << i << " " << sim_ones << " " << dif_ones << " " << qc->query_kmers[i] << std::endl;  
+            }
             //qk_vector.emplace_back(qc->query_kmers);
             //qs_vector.emplace_back(qc->query);
             //std::cerr << "local qc recorded as " << qc->matched_kmers << std::endl;
@@ -370,15 +410,18 @@ void query_batch(BloomTree* root, QuerySet & qs) {
             std::cout << root->name() << " leaf " << n << std::endl;
         }
 
+        int copy_it = 0;
+
         if (pass.size() > 0) {
             // if present, recurse into left child
+
             if (root->child(0)) {
                 query_batch(root->child(0), pass);
             }
 
             //temp_copy restores relevant queries for left child.
             //QuerySet::iterator copy_it = copy.begin();
-            int copy_it = 0;
+            //int copy_it = 0;
             if (mk_vector.size() != pass.size()){
                 DIE("DELETED QUERY NEEDS TO BE RESTORED");
             }
@@ -400,17 +443,55 @@ void query_batch(BloomTree* root, QuerySet & qs) {
                 copy_it++; 
             }
 
-
+            std::cerr << "Made it to right child \n";
             // if present, recurse into right child
             if (root->child(1)) {
+                std::cerr << "Querying right child \n";
+                std::cerr << pass.size() << std::endl;
                 query_batch(root->child(1), pass);
             }
-        }
-
+            std::cerr << "Made it past right child \n";
+            // *** We now need to undo the changes made to the query vector
+            // We can only do this by looking up select operations on the parent
+       }
 
         // Query passes tracks number of hits. If hits exceeds threshold
-        // Everything below current node passes.  
+        // Everything below current node passes. 
+
+        const BloomTree* r_parent = root->get_parent();
+        if (r_parent){
+            copy_it=0;
+            for (auto & q : pass){
+                q->query_kmers=query_vector[copy_it];
+                copy_it++;
+            }
+        }
+        /*
+            if (r_parent){
+                std::cerr << "Roll back " << pass.size() << " " << r_parent->bf()->get_name() << std::endl;
+                copy_it = 0;
+                compressedSBF* cbf_parent = dynamic_cast<compressedSBF*>(r_parent->bf());
+                sdsl::select_support_rrr<0,255> sbv_sim(cbf_parent->sim_bits);
+                sdsl::select_support_rrr<1,255> sbv_dif(cbf_parent->dif_bits);
+                //std::cerr << "Loop1?\n";
+                for (auto & q : pass) {
+                    std::cerr << "Rollback tail index " << ti_vector[copy_it] << " " << q->tail_index << std::endl;
+                    for (int i = 0; i <= ti_vector[copy_it]; i++) {
+                        //std::cerr << "Loop2?\n";
+                        auto & m = q->query_kmers[i];
+                        if (m==0){ DIE("I'm not sure if 0 is valid"); }
+                        uint64_t dif_pos = sbv_dif(m);
+                        q->query_kmers[i]=sbv_sim(dif_pos);
+                        //std::cerr << m << " " << dif_pos << " " << q->query_kmers[i] << std::endl;
+                    }
+                    copy_it++;
+                }
+            }
+        */
+
+        std::cerr << "Completed batch_query instance " << root->bf()->get_name() << std::endl; 
     }
+
 } 
 
 
