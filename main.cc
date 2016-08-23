@@ -336,24 +336,24 @@ int main(int argc, char* argv[]) {
     } else if (command == "stealthq"){
         int nh;
         HashPair* hp = get_hash_function(hashes_file, nh);
-        //BF* bf1 = load_bf_from_file(bvfile1, *hp, nh);
+        BF* bf1 = load_bf_from_file(bvfile1, *hp, nh);
         //BF* bf2 = load_bf_from_file(bvfile2, *hp, nh);
-        //bf1->load();
+        bf1->load();
         //bf2->load();
 
-        //std::cerr << bf1->size(0) << " " << bf1->size(1) << std::endl;
+        std::cerr << bf1->size(0) << " " << bf1->size(1) << std::endl;
         //std::cerr << bf2->size(0) << " " << bf2->size(1) << std::endl;
 
-        SBF* bf1 = new SBF(bvfile1, *hp, nh, 64);
+        //SBF* bf1 = new SBF(bvfile1, *hp, nh, 64);
         //BF* bf2 = SBF(bvfile2, *hp, nh, 64);
 
-        bf1->print();
-        uint64_t* bf1_sim=bf1->sim->data();
-        (*bf1_sim)=0xAAAAAAAAAAAAAAAA;
-        uint64_t* bf1_dif=bf1->dif->data();
-        (*bf1_dif)=0x5555555555555555;
+        //bf1->print();
+        //uint64_t* bf1_sim=bf1->sim->data();
+        //(*bf1_sim)=0xAAAAAAAAAAAAAAAA;
+        //uint64_t* bf1_dif=bf1->dif->data();
+        //(*bf1_dif)=0x5555555555555555;
 
-        bf1->print();
+        //bf1->print();
 
   //      std::srand(std::time(0));
 

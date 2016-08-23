@@ -934,6 +934,9 @@ SBF::SBF(const std::string & f, BF* rm, BF* o) :
     }
     assert(new_dif_counter == new_dif_size);
     std::cerr << "Check dif_counter: " << new_dif_counter << std::endl; 
+    sdsl::rank_support_v<> rbv_new_dif(dif);
+    std::cerr << "Num ones in new dif: " << rbv_new_dif(dif->size()) << std::endl;
+
 }
         
 // Case where uint is all 0 (and there's at least 64 bits of space in new sim)

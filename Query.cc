@@ -160,6 +160,7 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
     } else {// end of normal
         // tail index 
         c = q->matched_kmers;
+        std::cerr << bf->size(0) << " " << bf->size(1) << std::endl;
         //std::set<jellyfish::mer_dna> passedKmers;
         //for (const auto & m : q->query_kmers) {
         // We dont add or delete elements. Re-arranging their order based on tail index
@@ -363,6 +364,7 @@ void query_batch(BloomTree* root, QuerySet & qs) {
         std::vector<int> mk_vector; //matched_kmers
         std::vector<int> ti_vector; //tail_index
         std::vector<std::vector<size_t>> query_vector;
+        std::vector<std::vector<size_t>> adj_query_vector;
         //std::vector<std::set<jellyfish::mer_dna>> qk_vector;
         //std::vector<std::string> qs_vector;
 
@@ -397,6 +399,7 @@ void query_batch(BloomTree* root, QuerySet & qs) {
                 
                 //std::cerr << i << " " << sim_ones << " " << dif_ones << " " << qc->query_kmers[i] << std::endl;  
             }
+            adj_query_vector.emplace_back(qc->query_kmers);
             //qk_vector.emplace_back(qc->query_kmers);
             //qs_vector.emplace_back(qc->query);
             //std::cerr << "local qc recorded as " << qc->matched_kmers << std::endl;
@@ -439,7 +442,8 @@ void query_batch(BloomTree* root, QuerySet & qs) {
                 //q->query_kmers=qk_vector[copy_it];
                 //std::cerr << "post-restore qc " << q->matched_kmers << std::endl;
                 q->matched_kmers=mk_vector[copy_it];//temp->matched_kmers;
-                q->tail_index=ti_vector[copy_it];            
+                q->tail_index=ti_vector[copy_it];
+                q->query_kmers=adj_query_vector[copy_it];   
                 copy_it++; 
             }
 
@@ -462,6 +466,7 @@ void query_batch(BloomTree* root, QuerySet & qs) {
         if (r_parent){
             copy_it=0;
             for (auto & q : pass){
+                std::cerr << "Restoring query_kmers" << std::endl;
                 q->query_kmers=query_vector[copy_it];
                 copy_it++;
             }
