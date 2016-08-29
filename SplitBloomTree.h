@@ -71,6 +71,7 @@ private:
 
 SplitBloomTree* read_split_bloom_tree(const std::string & filename, bool read_hashes=true);
 void convert_sbt_filters(BloomTree* T, BF* cumul, std::string out_loc);
+void validate_SSBT(BloomTree* T);
 /*
 void write_bloom_tree(const std::string & outfile, SplitBloomTree* root, const std::string & matrix_file);
 void write_compressed_bloom_tree(const std::string & outfile, SplitBloomTree* root, const std::string & matrix_file);

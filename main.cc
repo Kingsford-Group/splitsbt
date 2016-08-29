@@ -371,13 +371,15 @@ int main(int argc, char* argv[]) {
         std::cerr << "Loading bloom tree topology: " << bloom_tree_file
             << std::endl;
         SplitBloomTree* root = read_split_bloom_tree(bloom_tree_file);
-        HashPair hp = root->get_hashes();
-        int nh = root->get_num_hash();
-        uint64_t size = root->bf()->size();
-        UncompressedBF* cumul = new UncompressedBF("temp_cumul", hp, nh, size);
+        validate_SSBT(root);
 
-        std::cerr << "Converting..." << std::endl;
-        convert_sbt_filters(root, cumul, out_file);
+        //HashPair hp = root->get_hashes();
+        //int nh = root->get_num_hash();
+        //uint64_t size = root->bf()->size();
+        //UncompressedBF* cumul = new UncompressedBF("temp_cumul", hp, nh, size);
+
+        //std::cerr << "Converting..." << std::endl;
+        //convert_sbt_filters(root, cumul, out_file);
     }
     std::cerr << "Done." << std::endl;
 }

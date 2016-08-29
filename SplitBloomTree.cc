@@ -298,6 +298,60 @@ void convert_sbt_filters(BloomTree* T, BF* cumul, std::string out_loc){
 
 }
 
+
+// Validates a compressed SSBT
+void validate_SSBT(BloomTree* T){
+    SplitBloomTree* ST = dynamic_cast<SplitBloomTree*>(T);
+    if (ST==nullptr){
+        DIE("Must use SplitBloomTree");
+    }
+
+    BF* root_bf = ST->bf();
+
+    compressedSBF* rbf = dynamic_cast<compressedSBF*>(root_bf);
+    if (rbf==nullptr){
+        DIE("Failed to convert root to cbf");
+    }   
+    uint64_t sim_size = rbf->size(0);
+    uint64_t dif_size = rbf->size(1);
+
+    sdsl::rank_support_rrr<1,255> rbv_sim(rbf->sim_bits);
+    uint64_t sim_ones = rbv_sim(sim_size);
+
+    if (sim_size!=sim_ones+dif_size){
+        std::cerr << "Bad internal filters at: " << rbf->get_name() << std::endl;
+        std::cerr << "sim_size: " << sim_size << std::endl;
+        std::cerr << "dif_size: " << dif_size << std::endl;
+        std::cerr << "sim_ones: " << sim_ones << std::endl;
+        DIE("Dif filter not sized to sim_size - sim_ones");
+    }
+    
+    if (ST->child(0)){
+        BF* child0_bf = ST->child(0)->bf();
+        compressedSBF* c0bf = dynamic_cast<compressedSBF*>(child0_bf);
+        if (c0bf==nullptr){
+            DIE("Failed to convert child to cbf");
+        } 
+
+        BF* child1_bf = ST->child(1)->bf();
+        compressedSBF* c1bf = dynamic_cast<compressedSBF*>(child1_bf);
+        if (c1bf==nullptr){
+            DIE("Failed to convert child to cbf");
+        } 
+
+        if(c0bf->size(0) != c1bf->size(0)){
+            std::cerr <<"Bad external filters at: " << rbf->get_name() << std::endl;
+            std::cerr<<"Parent dif filter: " << dif_size <<std::endl;
+            std::cerr<<"Child 0 sim filter: " << c0bf->size(0) <<std::endl;
+            std::cerr<<"Child 1 sim filter: " << c1bf->size(1) <<std::endl;
+            DIE("Child sim size mismatch");
+        }    
+        validate_SSBT(ST->child(0));
+        validate_SSBT(ST->child(1));
+    }
+    std::cerr << "Validated " << rbf->get_name() <<std::endl;
+}
+
 /*
 void write_bloom_tree_helper(std::ostream & out, SplitBloomTree* root, int level=1) {
     std::string lstr(level, '*');

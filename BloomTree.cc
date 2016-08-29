@@ -112,7 +112,7 @@ void BloomTree::set_dirty(bool b) const{
 // Frees the memory associated with the bloom filter
 void BloomTree::unload() const { 
     // you can't unload something until you remove it from the cache
-    // DEBUG std::cerr << "Unloading " << name() << std::endl;
+    std::cerr << "Unloading " << name() << std::endl;
     
     // free the memory
     if (bloom_filter != nullptr) {
@@ -148,7 +148,7 @@ void BloomTree::protected_cache(bool b) {
 // Loads the bloom filtering into memory
 bool BloomTree::load() const {
     if (bloom_filter == nullptr) {
-        //std::cerr << "Loading BF: " << filename << std::endl;
+        std::cerr << "Loading BF (reg BT): " << filename << std::endl;
 
         // if the cache isn't protected from deleting elements, remove enough
         // elements so that there is 1 cache spot free (if the cache is
