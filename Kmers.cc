@@ -43,6 +43,18 @@ std::list<jellyfish::mer_dna> list_kmers_in_string(const std::string & str){
     return l;
 }
 */
+
+std::vector<jellyfish::mer_dna> vector_kmers_in_string(const std::string & str){
+    auto k = jellyfish::mer_dna::k();
+    std::set<jellyfish::mer_dna> s;
+    for (size_t i = 0; i <= str.size() - k; i++) {
+        s.insert(jellyfish::mer_dna(str.substr(i, k)));
+    }
+    std::vector<jellyfish::mer_dna> v(s.size());
+    std::copy(s.begin(), s.end(), v.begin());
+    return v;
+}
+/*
 std::vector<jellyfish::mer_dna> vector_kmers_in_string(const std::string & str){
     auto k = jellyfish::mer_dna::k();
     std::vector<jellyfish::mer_dna> v(str.size()-k+1);
@@ -51,6 +63,7 @@ std::vector<jellyfish::mer_dna> vector_kmers_in_string(const std::string & str){
     }
     return v;
 }
+*/
 // Make sure npos is always right of opos
 // Also make sure npos is inside array
 void swap_kmer_position(std::vector<jellyfish::mer_dna> & v, int opos, int npos){

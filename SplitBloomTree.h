@@ -25,9 +25,9 @@ public:
     //virtual Heap<const SplitBloomTree>::heap_reference* get_heap_ref();
     //static void protected_cache(bool b);
 
-protected:
-    bool load() const;
-    void unload() const;
+//protected:
+//    bool load() const;
+//    void unload() const;
 };
 
 

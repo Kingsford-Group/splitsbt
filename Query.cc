@@ -76,7 +76,12 @@ void compress_bt(BloomTree* root) {
 }
 
 void compress_splitbt(BloomTree* root, BF* rbf){
-    if (root == nullptr) return;
+    std::cerr << "Cache Size: " << root->cache_size() <<std::endl;
+
+    if (root == nullptr) {
+        DIE("We should no longer pass through leaves.");
+        return;
+    }
    
     //SplitBloomTree* - We might not need to dynamic cast this
  
@@ -86,34 +91,59 @@ void compress_splitbt(BloomTree* root, BF* rbf){
     }
     
     //compress
+    // Test whether compression is memory leak
     root->bf()->compress(remove_bf);
 
-    //add current, compress children
-    remove_bf->update_mask(root->bf());
-    
+    // If we are a leaf, no need to adjust filter
     if(root->child(0)){
-        compress_splitbt(root->child(0), remove_bf);
-    }
-    if(root->child(1)){
-        compress_splitbt(root->child(1), remove_bf);
-    }
+
+        //root->protected_cache(true);
+        //add current, compress children
+        remove_bf->update_mask(root->bf());
     
-    //remove current
-    if (root->get_parent() != nullptr){
-        if (root->name() == root->get_parent()->child(0)->name()){
-            remove_bf->update_mask(root->bf(), root->get_parent()->child(1)->bf());
-        } else {
-            assert(root->get_parent()->child(1)->name()==root->name());
-            remove_bf->update_mask(root->bf(), root->get_parent()->child(0)->bf());
+        if(root->child(0)){
+            compress_splitbt(root->child(0), remove_bf);
         }
+        if(root->child(1)){
+            compress_splitbt(root->child(1), remove_bf);
+        }
+        
+        root->protected_cache(true);
+        //remove current
+        if (root->get_parent() != nullptr){
+            BloomTree* mySiblingBT;
+            //std::cerr << "My name is: '" << root->name() << "'\n";
+            //std::cerr << "My bloom filter's name is: '" << root->bf()->get_name() << "'\n"; 
+            if (root->name() == root->get_parent()->child(0)->name()){
+                mySiblingBT = root->get_parent()->child(1);
+                //std::cerr << "My name is: '" << root->get_parent()->child(0)->name() << "'\n";
+                //std::cerr << "My sibling's name is: '" << root->get_parent()->child(1)->name() << "'\n";
+                BF* myStupidBF = root->bf();
+                BF* myStupidSibling = mySiblingBT->bf();
+                //std::cerr << "My stupid name is: " << myStupidBF->get_name() <<std::endl;
+                //std::cerr << "My stupid sibling's name is: " << myStupidSibling->get_name() <<std::endl;
+                remove_bf->update_mask(myStupidBF, myStupidSibling);
+                //remove_bf->update_mask(root->bf(), root->get_parent()->child(1)->bf());
+            } else {
+                mySiblingBT = root->get_parent()->child(0);
+                //std::cerr << "My name is: '" << root->get_parent()->child(1)->name() << "'\n";
+                //std::cerr << "My siblin's name is: '" << root->get_parent()->child(0)->name() << "'\n";
+                assert(root->get_parent()->child(1)->name()==root->name());
+                BF* myStupidBF = root->bf();
+                BF* myStupidSibling = mySiblingBT->bf();
+                //std::cerr << "My stupid name is: " << myStupidBF->get_name() <<std::endl;
+                //std::cerr << "My stupid sibling's name is: " << myStupidSibling->get_name() <<std::endl;
+                remove_bf->update_mask(myStupidBF, myStupidSibling);
+                
+                //remove_bf->update_mask(root->bf(), root->get_parent()->child(0)->bf());
+            }
+        } else{
+            std::cerr<< "GLOBAL ROOT NAME: " << root->name() <<std::endl;
+        }
+        root->set_usage(0);
+        root->protected_cache(false);
     }
- 
-    //remove_bf->update_mask(root, 0);
-    //root->bf()->compress
-    
-    // There's no reason why this has to be an SBF. Should change it if time today
-    //BF* remove_bf = new SBF("notsaved.txt", root->bf()->get_hashes(), root->bf()->get_num_hash(), root->bf()->size());
-}
+} 
 
 bool query_passes(BloomTree* root, const std::set<jellyfish::mer_dna> & q) {
     assert(q.size() > 0);
@@ -129,6 +159,7 @@ bool query_passes(BloomTree* root, const std::set<jellyfish::mer_dna> & q) {
 
 
 // return true if the filter at this node contains > QUERY_THRESHOLD kmers
+// XXX: Fix query to work for BF, SBF, compressedSBF
 bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::mer_dna> & q) {
     float weight = 1.0;
     //assert(q.size() > 0);
@@ -160,7 +191,8 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
     } else {// end of normal
         // tail index 
         c = q->matched_kmers;
-        std::cerr << bf->size(0) << " " << bf->size(1) << std::endl;
+        std::cerr << "Prematch: " << c << ", Tail Index: " << q->tail_index <<std::endl;
+        //std::cerr << bf->size(0) << " " << bf->size(1) << std::endl;
         //std::set<jellyfish::mer_dna> passedKmers;
         //for (const auto & m : q->query_kmers) {
         // We dont add or delete elements. Re-arranging their order based on tail index
@@ -175,7 +207,7 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
             compressedSBF* cbf = dynamic_cast<compressedSBF*>(bf);
             if (m > cbf->size(0)){
                 std::cerr << "Tail Index: " << i << " " << q->tail_index << std::endl;
-               std::cerr << m << " " << cbf->size(0) << " " << cbf->size(1) << std::endl;
+                std::cerr << m << " " << cbf->size(0) << " " << cbf->size(1) << std::endl;
                 DIE("Hash value out of bounds");
             }
         
@@ -203,7 +235,7 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
         //q->query_kmers=passedKmers;
     }
     //std::cerr << root->name() << std::endl;
-    //std::cerr << c << " " << QUERY_THRESHOLD * q->total_kmers << std::endl;
+    std::cerr << "Total weight: " << c << ", thresh: " << QUERY_THRESHOLD << ", maxkmer: " << q->total_kmers << std::endl;
     return (c >= QUERY_THRESHOLD * q->total_kmers);
 }
 

@@ -864,6 +864,7 @@ SBF::SBF(const std::string & f, BF* rm, BF* o) :
     std::cerr << "Check dif_counter: " << new_dif_counter << std::endl; 
     sdsl::rank_support_v<> rbv_new_dif(dif);
     std::cerr << "Num ones in new dif: " << rbv_new_dif(dif->size()) << std::endl;
+    delete remove_mask;
 }
         
 SBF::~SBF() {
@@ -1529,7 +1530,7 @@ sdsl::bit_vector* union_bv_fast(const sdsl::bit_vector & b1, const sdsl::bit_vec
 }
 
 BF* load_bf_from_file(const std::string & fn, HashPair hp, int nh) {
-    std::cerr << "BF-side loading: " << fn << std::endl;
+    //std::cerr << "BF-side loading: " << fn << std::endl;
     if (fn.substr(fn.size()-14) == ".sim.bf.bv.rrr"){
         return new compressedSBF(fn, hp, nh);
     } else if (fn.substr(fn.size()-4) == ".rrr") {

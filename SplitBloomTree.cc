@@ -37,6 +37,7 @@ SplitBloomTree::~SplitBloomTree() {
 }
 
 // Frees the memory associated with the bloom filter
+/*
 void SplitBloomTree::unload() const { 
     // you can't unload something until you remove it from the cache
     // DEBUG 
@@ -52,8 +53,9 @@ void SplitBloomTree::unload() const {
     }
     dirty = false;
 }
-
+*/
 // Loads the bloom filtering into memory
+/* Remove this to try to eliminate overloaded methods
 bool SplitBloomTree::load() const {
     if (bloom_filter == nullptr) {
         //std::cerr << "Loading BF: " << filename << std::endl;
@@ -81,7 +83,7 @@ bool SplitBloomTree::load() const {
     }
     return true;
 }
-
+*/
 // Create a new node that is the union of the bloom filters
 // in two other nodes;
 // These nodes were not previously linked and thus we dont have any 'new differences' to add back in
@@ -318,6 +320,8 @@ void validate_SSBT(BloomTree* T){
     sdsl::rank_support_rrr<1,255> rbv_sim(rbf->sim_bits);
     uint64_t sim_ones = rbv_sim(sim_size);
 
+
+    //Each filter's dif is sized by the number of ones in the sim
     if (sim_size!=sim_ones+dif_size){
         std::cerr << "Bad internal filters at: " << rbf->get_name() << std::endl;
         std::cerr << "sim_size: " << sim_size << std::endl;
@@ -326,7 +330,9 @@ void validate_SSBT(BloomTree* T){
         DIE("Dif filter not sized to sim_size - sim_ones");
     }
     
+    // Validate children
     if (ST->child(0)){
+        //Make sure children load as compressedSBF
         BF* child0_bf = ST->child(0)->bf();
         compressedSBF* c0bf = dynamic_cast<compressedSBF*>(child0_bf);
         if (c0bf==nullptr){
@@ -339,13 +345,30 @@ void validate_SSBT(BloomTree* T){
             DIE("Failed to convert child to cbf");
         } 
 
-        if(c0bf->size(0) != c1bf->size(0)){
+        // Make sure both children of my node have the same sim size
+        sdsl::rank_support_rrr<0,255> rbv_dif(rbf->dif_bits);
+        uint64_t dif_ones = rbv_dif(dif_size);
+        uint64_t child0_size = c0bf->size(0);
+        uint64_t child1_size = c1bf->size(0);
+
+        if(child0_size != child1_size){
             std::cerr <<"Bad external filters at: " << rbf->get_name() << std::endl;
             std::cerr<<"Parent dif filter: " << dif_size <<std::endl;
-            std::cerr<<"Child 0 sim filter: " << c0bf->size(0) <<std::endl;
-            std::cerr<<"Child 1 sim filter: " << c1bf->size(1) <<std::endl;
+            std::cerr<<"Child 0 sim filter: " << child0_size <<std::endl;
+            std::cerr<<"Child 1 sim filter: " << child1_size <<std::endl;
             DIE("Child sim size mismatch");
-        }    
+        }
+
+        // Make sure sim filters are exactly equal to dif-dif ones
+        if(dif_size!=child0_size+dif_ones){
+            std::cerr <<"Child not sized properly at: " << rbf->get_name() <<std::endl;
+            std::cerr<<"Parent dif filter: " << dif_size <<std::endl;
+            std::cerr<<"Parent dif num ones: " << dif_ones <<std::endl;
+            std::cerr<<"Child 0 sim filter: " << child0_size <<std::endl;
+            std::cerr<<"Child 1 sim filter: " << child1_size <<std::endl;
+            DIE("Sim + dif ones should equal dif filter");
+
+        }
         validate_SSBT(ST->child(0));
         validate_SSBT(ST->child(1));
     }
