@@ -343,13 +343,21 @@ void validate_SSBT(BloomTree* T){
         compressedSBF* c1bf = dynamic_cast<compressedSBF*>(child1_bf);
         if (c1bf==nullptr){
             DIE("Failed to convert child to cbf");
-        } 
+        }
+
+        if(rbf->get_name() != c0bf->get_name()){
+            DIE("Somehow parent is left child!");
+        }
+        if(rbf->get_name() != c1bf->get_name()){
+            DIE("Somehow parent is right child!");
+        }
 
         // Make sure both children of my node have the same sim size
         sdsl::rank_support_rrr<0,255> rbv_dif(rbf->dif_bits);
         uint64_t dif_ones = rbv_dif(dif_size);
         uint64_t child0_size = c0bf->size(0);
         uint64_t child1_size = c1bf->size(0);
+        assert(dif_ones >= 0);
 
         if(child0_size != child1_size){
             std::cerr <<"Bad external filters at: " << rbf->get_name() << std::endl;
@@ -367,12 +375,12 @@ void validate_SSBT(BloomTree* T){
             std::cerr<<"Child 0 sim filter: " << child0_size <<std::endl;
             std::cerr<<"Child 1 sim filter: " << child1_size <<std::endl;
             DIE("Sim + dif ones should equal dif filter");
-
         }
+
         validate_SSBT(ST->child(0));
         validate_SSBT(ST->child(1));
     }
-    std::cerr << "Validated " << rbf->get_name() <<std::endl;
+    std::cerr << "Validated " << rbf->get_name() << " (Size: " << rbf->size(0) <<")"  <<std::endl;
 }
 
 /*

@@ -96,7 +96,12 @@ void compress_splitbt(BloomTree* root, BF* rbf){
 
     // If we are a leaf, no need to adjust filter
     if(root->child(0)){
-
+        if (root->name()==root->child(0)->name()){
+            DIE("Node cannot be its own parent!");
+        }
+        if (root->name()==root->child(1)->name()){
+            DIE("Node cannot be its own parent!");
+        }
         //root->protected_cache(true);
         //add current, compress children
         remove_bf->update_mask(root->bf());
@@ -205,7 +210,10 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
             //}
             //std::cerr << i << " " << q->tail_index << std::endl;
             compressedSBF* cbf = dynamic_cast<compressedSBF*>(bf);
-            if (m > cbf->size(0)){
+            if (cbf == nullptr){
+                DIE("Could not convert to compressedSBF");
+            }
+            if (m >= cbf->size(0)){
                 std::cerr << "Tail Index: " << i << " " << q->tail_index << std::endl;
                 std::cerr << m << " " << cbf->size(0) << " " << cbf->size(1) << std::endl;
                 DIE("Hash value out of bounds");
@@ -382,7 +390,6 @@ void query_batch(BloomTree* root, QuerySet & qs) {
                 //std::cerr << "Query passes \n";
                 if (has_children) {
                     pass.emplace_back(q);
-                    //copy.emplace_back(QueryInfo(*q));
                 } else {
                     q->matching.emplace_back(root);
                     n++;
@@ -395,8 +402,8 @@ void query_batch(BloomTree* root, QuerySet & qs) {
         //Each node is storing the query_kmers and # matching at that position
         std::vector<int> mk_vector; //matched_kmers
         std::vector<int> ti_vector; //tail_index
-        std::vector<std::vector<size_t>> query_vector;
-        std::vector<std::vector<size_t>> adj_query_vector;
+        //std::vector<std::vector<size_t>> query_vector;
+        //std::vector<std::vector<size_t>> adj_query_vector;
         //std::vector<std::set<jellyfish::mer_dna>> qk_vector;
         //std::vector<std::string> qs_vector;
 
@@ -416,22 +423,28 @@ void query_batch(BloomTree* root, QuerySet & qs) {
         // A hit match in the sim is recorded by tail_index and matched_kmer
 
         for (auto qc : pass) {
-            mk_vector.emplace_back(qc->matched_kmers);
-            ti_vector.emplace_back(qc->tail_index);
-            query_vector.emplace_back(qc->query_kmers);
-            std::cerr << "Internal loop TAIL INDEX: " << qc->tail_index << std::endl;
-            for (int i = 0; i <= qc->tail_index; i++) {
-                auto m = qc->query_kmers[i];
-               
-                assert(m <= cbf->size(0)); 
-                size_t sim_ones = rbv_sim(m);
-                assert(m-sim_ones <= cbf->size(1));
-                size_t dif_ones = rbv_dif(m-sim_ones);
-                qc->query_kmers[i]=m-sim_ones-dif_ones;
+            //Because we can't know if mk is needed or not we'll just keep it always
+                mk_vector.emplace_back(qc->matched_kmers);
+                ti_vector.emplace_back(qc->tail_index);
+                //query_vector.emplace_back(qc->query_kmers);
+                std::cerr << "Internal loop TAIL INDEX: " << qc->tail_index << std::endl;
+            
+            if (qc->matched_kmers >= QUERY_THRESHOLD * qc->total_kmers){
+                //pass
+            } else{ //Only adjust queries which still need to be checked
+                for (int i = 0; i <= qc->tail_index; i++) {
+                    auto m = qc->query_kmers[i];
+                   
+                    assert(m <= cbf->size(0)); 
+                    size_t sim_ones = rbv_sim(m);
+                    assert(m-sim_ones <= cbf->size(1));
+                    size_t dif_ones = rbv_dif(m-sim_ones);
+                    qc->query_kmers[i]=m-sim_ones-dif_ones;
                 
-                //std::cerr << i << " " << sim_ones << " " << dif_ones << " " << qc->query_kmers[i] << std::endl;  
+                    //std::cerr << i << " " << sim_ones << " " << dif_ones << " " << qc->query_kmers[i] << std::endl;  
+                }
             }
-            adj_query_vector.emplace_back(qc->query_kmers);
+            //adj_query_vector.emplace_back(qc->query_kmers);
             //qk_vector.emplace_back(qc->query_kmers);
             //qs_vector.emplace_back(qc->query);
             //std::cerr << "local qc recorded as " << qc->matched_kmers << std::endl;
@@ -449,18 +462,30 @@ void query_batch(BloomTree* root, QuerySet & qs) {
 
         if (pass.size() > 0) {
             // if present, recurse into left child
-
+            std::cerr << "Non-zero pass size: " << pass.size() << std::endl;
             if (root->child(0)) {
+                std::cerr << "Querying left child \n";
                 query_batch(root->child(0), pass);
             }
-
+            //std::cerr << "Made it past left child \n";
             //temp_copy restores relevant queries for left child.
             //QuerySet::iterator copy_it = copy.begin();
             //int copy_it = 0;
             if (mk_vector.size() != pass.size()){
                 DIE("DELETED QUERY NEEDS TO BE RESTORED");
             }
+            copy_it = 0;
             for (auto & q : pass){
+                if (mk_vector[copy_it] >= QUERY_THRESHOLD * q->total_kmers){
+                    //This is debug and can be removed later
+                    if (q->matched_kmers!=mk_vector[copy_it]){
+                        DIE("Touched a passable query's matched_kmers!");
+                    }
+                    if (q->tail_index!=ti_vector[copy_it]){
+                        DIE("Touched a passable query's tail index!");
+                    }
+                    //pass
+                } else{ 
                 //if(q->query != qs_vector[copy_it]){
                 //    DIE("Query out of order!");
                 //}
@@ -473,60 +498,119 @@ void query_batch(BloomTree* root, QuerySet & qs) {
                 //q->query_kmers=temp->query_kmers;
                 //q->query_kmers=qk_vector[copy_it];
                 //std::cerr << "post-restore qc " << q->matched_kmers << std::endl;
-                q->matched_kmers=mk_vector[copy_it];//temp->matched_kmers;
-                q->tail_index=ti_vector[copy_it];
-                q->query_kmers=adj_query_vector[copy_it];   
+                //std::cerr << "pre-restore tail " << q->tail_index <<std::endl;
+                    q->matched_kmers=mk_vector[copy_it];//temp->matched_kmers;
+                    q->tail_index=ti_vector[copy_it];
+                }
+                //std::cerr << "post-restore tail " << q->tail_index<<std::endl;
+                //q->query_kmers=adj_query_vector[copy_it];   
                 copy_it++; 
             }
 
-            std::cerr << "Made it to right child \n";
+            //std::cerr << "Made it to right child \n";
             // if present, recurse into right child
             if (root->child(1)) {
                 std::cerr << "Querying right child \n";
-                std::cerr << pass.size() << std::endl;
                 query_batch(root->child(1), pass);
             }
-            std::cerr << "Made it past right child \n";
+            //std::cerr << "Made it past right child \n";
             // *** We now need to undo the changes made to the query vector
             // We can only do this by looking up select operations on the parent
-       }
+       
 
-        // Query passes tracks number of hits. If hits exceeds threshold
-        // Everything below current node passes. 
+            // Query passes tracks number of hits. If hits exceeds threshold
+            // Everything below current node passes. 
 
-        const BloomTree* r_parent = root->get_parent();
-        if (r_parent){
-            copy_it=0;
-            for (auto & q : pass){
-                std::cerr << "Restoring query_kmers" << std::endl;
-                q->query_kmers=query_vector[copy_it];
-                copy_it++;
-            }
-        }
-        /*
+            //const BloomTree* r_parent = root->get_parent();
+            /*
             if (r_parent){
-                std::cerr << "Roll back " << pass.size() << " " << r_parent->bf()->get_name() << std::endl;
-                copy_it = 0;
-                compressedSBF* cbf_parent = dynamic_cast<compressedSBF*>(r_parent->bf());
-                sdsl::select_support_rrr<0,255> sbv_sim(cbf_parent->sim_bits);
-                sdsl::select_support_rrr<1,255> sbv_dif(cbf_parent->dif_bits);
-                //std::cerr << "Loop1?\n";
-                for (auto & q : pass) {
-                    std::cerr << "Rollback tail index " << ti_vector[copy_it] << " " << q->tail_index << std::endl;
-                    for (int i = 0; i <= ti_vector[copy_it]; i++) {
-                        //std::cerr << "Loop2?\n";
-                        auto & m = q->query_kmers[i];
-                        if (m==0){ DIE("I'm not sure if 0 is valid"); }
-                        uint64_t dif_pos = sbv_dif(m);
-                        q->query_kmers[i]=sbv_sim(dif_pos);
-                        //std::cerr << m << " " << dif_pos << " " << q->query_kmers[i] << std::endl;
-                    }
+                std::cerr << "Tree position: \n";
+                std::cerr << root->name() << " " << r_parent->name() << std::endl;
+                std::cerr << root->child(0)->name() << " " << root->child(1)->name() << std::endl;
+                //std::cerr << root->child(0)->bf()->get_name() << " " << root->child(1)->bf()->get_name() << std::endl;
+                //compressedSBF* c0 = dynamic_cast<compressedSBF*>(root->child(0)->bf());
+                //compressedSBF* c1 = dynamic_cast<compressedSBF*>(root->child(1)->bf());
+                //cbf = dynamic_cast<compressedSBF*>(sroot->bf());
+                //std::cerr << c0->get_name() << " " << c1->get_name() << std::endl;
+                //std::cerr << cbf->get_name() << " " <<  c0->get_name() << " " << c1->get_name() << std::endl;
+            } 
+            */
+            /*if (r_parent){
+                copy_it=0;
+                for (auto & q : pass){
+                    std::cerr << "Restoring query_kmers" << std::endl;
+                    q->query_kmers=query_vector[copy_it];
                     copy_it++;
                 }
             }
-        */
+            */
+            //if (r_parent){
+                //std::cerr << "Roll back " << pass.size() << " " << r_parent->bf()->get_name() << std::endl;
+                copy_it = 0;
+                //compressedSBF* cbf_parent = dynamic_cast<compressedSBF*>(r_parent->bf());
+                cbf = dynamic_cast<compressedSBF*>(sroot->bf());
+                sdsl::select_support_rrr<0,255> sbv_sim(cbf->sim_bits);
+                sdsl::select_support_rrr<1,255> sbv_dif(cbf->dif_bits);
+                //std::cerr << "Parent sim size: " << cbf_parent->sim_bits->size() <<std::endl;
+                //std::cerr << "Parent dif size: " << cbf_parent->dif_bits->size() << std::endl;
+                //std::cerr << "Loop1?\n";
+                for (auto & q : pass) {
+                    if (mk_vector[copy_it] >= QUERY_THRESHOLD * q->total_kmers){
+                        //pass
+                    } else {
+                        //std::cerr << "Rollback tail index " << ti_vector[copy_it] << " " << q->tail_index << std::endl;
+                        //compressedSBF* c0 = dynamic_cast<compressedSBF*>(root->child(0)->bf());
+                        //compressedSBF* c1 = dynamic_cast<compressedSBF*>(root->child(1)->bf());
+                        //std::cerr << sroot->bf()->get_name() << " " << sroot->name() << std::endl;
+                        //std::cerr << cbf->get_name() << " " <<  c0->get_name() << " " << c1->get_name() << std::endl;
+                        //std::cerr << c0->size(0) <<  " " << c1->size(0) <<std::endl;
+                        //std::cerr << c0->size(1) << " " << c1->size(1) << std::endl;
+                        //std::cerr << cbf->sim_bits->size() << " " << cbf->dif_bits->size() << std::endl;
+                        //std::cerr << cbf->size(0) << " " << cbf->size(1) << std::endl;
+                        for (int i = 0; i <= ti_vector[copy_it]; i++) {
+                            //std::cerr << "Loop2?\n";
+                            auto & m = q->query_kmers[i];
+                            //std::cerr << "Original m value: " << m <<std::endl;
+                            
 
-        std::cerr << "Completed batch_query instance " << root->bf()->get_name() << std::endl; 
+
+                            assert(m<cbf->dif_bits->size());
+                            //if(m+1 >= cbf->dif_bits->size()){ std::cerr <<"DIF Index out of bounds!\n"; }
+                            size_t dif_pos = sbv_dif(m+1);
+                            assert(dif_pos<cbf->sim_bits->size());
+                            //if(dif_pos+1 >= cbf->sim_bits->size()){ std::cerr<<"SIM INDEX out of bounds!\n"; }
+                            //std::cerr << q->query_kmers[i] << " " << dif_pos << " " << sbv_sim(dif_pos) <<std::endl;
+                            q->query_kmers[i]=sbv_sim(dif_pos+1);
+                            //std::cerr << q->query_kmers[i] << " " << adj_query_vector[copy_it][i] <<std::endl;
+                            //std::cerr << m << " " << dif_pos << " " << q->query_kmers[i] << std::endl;
+                        }
+                    }
+               } 
+            /*
+                    std::set<size_t> adjs(query_vector[copy_it].begin(), query_vector[copy_it].end());
+                    std::set<size_t> qks(q->query_kmers.begin(), q->query_kmers.end());
+                    std::set<size_t>::iterator j = qks.begin();
+                    int cnt =0;
+                    for(std::set<size_t>::iterator i=adjs.begin(); i!=adjs.end(); ++i){
+                        if (*i != *j){
+                            std::cerr << "Error at rollback kmer "<<  cnt << std::endl;
+                            std::cerr << *i << " " << *j << std::endl;
+                            std::cerr << cbf->sim_bits->size() << std::endl;
+                            std::cerr << cbf->dif_bits->size() << std::endl;
+                            DIE("Should match up!");
+                        }
+                        ++j;
+                        ++cnt;
+                    }
+                    copy_it++;
+                }
+            */
+            //}
+        
+        } 
+    
+        std::cerr << "Completed batch_query instance " << root->bf()->get_name() << std::endl;
+        root->set_usage(0);
     }
 
 } 

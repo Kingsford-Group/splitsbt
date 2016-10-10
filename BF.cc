@@ -401,7 +401,8 @@ bool compressedSBF::contains(const size_t pos, int type) const{
     } else if (type == 1){
         sdsl::rank_support_rrr<1, 255> rbv_sim(sim_bits);
         size_t offset = rbv_sim.rank(pos);
-        assert(pos>= offset);
+        assert(pos>= offset); //non-negative boundary
+        assert(pos-offset<dif_bits->size()); //not larger then dif boundary
         if ((*dif_bits)[pos-offset] == 0) return false;
     } else {
         DIE("Error - only sim/dif filter 'types'!");
