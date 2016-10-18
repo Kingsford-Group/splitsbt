@@ -1154,6 +1154,19 @@ uint64_t SBF::similarity(const BF* other, int type) const {
             b2_sim_data++; 
         }
         return size()-dif_count; 
+    } else if (type == 3) {
+        uint64_t sim_count = 0;
+        uint64_t dif_count = 0;
+        const uint64_t* b1_dif_data = this->dif->data();
+        sdsl::bit_vector::size_type len = size()>>6;
+        for (sdsl::bit_vector::size_type p = 0; p < len; ++p) {
+            sim_count += __builtin_popcountl( (*b1_sim_data) & (*b2_sim_data) );
+            dif_count += __builtin_popcountl( (*b1_dif_data) & (*b2_sim_data) );
+            b1_sim_data++; b1_dif_data++;
+            b2_sim_data++;
+        }
+        return uint64_t(float(sim_count + dif_count) / float(size()));
+
     }
     // SHOULD ADD SIMILARITY ONLY METRIC AND DIFFERENCE ONLY METRIC (2 and 3) - if 2 is 0 then 3.
 	else if (type == -1) { // XXX: This is primed to be deleted but placeholder for now
