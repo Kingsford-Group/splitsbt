@@ -1165,7 +1165,7 @@ uint64_t SBF::similarity(const BF* other, int type) const {
             b1_sim_data++; b1_dif_data++;
             b2_sim_data++;
         }
-        return uint64_t(float(sim_count + dif_count) / float(size()));
+        return (sim_count + dif_count);
 
     }
     // SHOULD ADD SIMILARITY ONLY METRIC AND DIFFERENCE ONLY METRIC (2 and 3) - if 2 is 0 then 3.
