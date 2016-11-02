@@ -9,6 +9,7 @@
 #include <string>
 #include <cstdlib>
 #include <getopt.h>
+#include <cstdio>
 
 #include <jellyfish/file_header.hpp>
 
@@ -203,6 +204,7 @@ int process_options(int argc, char* argv[]) {
 
 
 int main(int argc, char* argv[]) {
+    std::ios::sync_with_stdio(false);
     std::cerr << "Starting Bloom Tree" << std::endl;
 
     process_options(argc, argv);

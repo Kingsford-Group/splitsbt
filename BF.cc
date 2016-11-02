@@ -329,7 +329,7 @@ void compressedSBF::load() {
 }
 
 void compressedSBF::save() {
-    std::cerr << "Saving BF to " << filename << std::endl;
+    //std::cerr << "Saving BF to " << filename << std::endl;
     sdsl::store_to_file(*sim_bits, this->get_sim_name());
     std::string fn = this->get_sim_name();
 
@@ -480,7 +480,7 @@ void UncompressedBF::load() {
 }
 
 void UncompressedBF::save() {
-    std::cerr << "Saving BF to " << filename << std::endl;
+    //std::cerr << "Saving BF to " << filename << std::endl;
     sdsl::store_to_file(*bv, filename);
 }
 
