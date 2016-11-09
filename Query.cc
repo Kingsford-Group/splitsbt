@@ -380,7 +380,6 @@ void query_batch(BloomTree* root, QuerySet & qs) {
             //std::cerr << "TAIL INDEX: " << q->tail_index << std::endl;
             //std::cerr << q->matched_kmers << " " << q->total_kmers * QUERY_THRESHOLD << std::endl;
             if (q->matched_kmers >= QUERY_THRESHOLD * q->total_kmers){
-                /// XXX: We should add a flag here to not perform spuriously when we aren't 'querying' anymore
                 //std::cerr << "Skipped search (enough similar kmers already found)" << std::endl;
                 if (has_children) {
                     pass.emplace_back(q);
@@ -397,6 +396,8 @@ void query_batch(BloomTree* root, QuerySet & qs) {
                     q->matching.emplace_back(root);
                     n++;
                 }
+            } else{ //Things which did not pass were still searched in query_passes
+                num_search++
             }
         }
 

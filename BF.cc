@@ -943,7 +943,7 @@ int SBF::operator[](uint64_t pos) const {
 
 //Set bit sets 'sim' filter
 //This adheres to base BF add().
-// XXX: MAKE SURE THIS IS ONLY USED IN LEAF BUILDING.
+//MAKE SURE THIS IS ONLY USED IN LEAF BUILDING.
 void SBF::set_bit(uint64_t p) {
     (*sim)[p] = 1;
 }
@@ -1097,8 +1097,6 @@ void SBF::update_mask(const BF* u1, const BF* u2){
 // Similarity could mean something different for SBF versus BF but right now it doesnt.
 // This function simply is adapted to compare xor and or by combining dif and sim
 
-//XXX: Is it physically impossible to have similarity in two filter's differences?
-// (Is thie method only called in situations where the filters are in the same subtree?)
 uint64_t SBF::similarity(const BF* other, int type) const {
     assert(other->size() == size());
 
@@ -1344,7 +1342,6 @@ void SBF::add_different(const sdsl::bit_vector & new_dif){
 
 
 // We want the elements in THIS->sim which are NOT in f2->sim
-// XXX: Delete comments below this point if the new thing works
 // Calculates what was removed [from this node] by the 'and' operation of sim vectors.
 // XXX: This is also super inefficient because we do the same calculation in union_into
 // but we can't edit the vector in this stage of the process
