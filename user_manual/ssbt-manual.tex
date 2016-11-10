@@ -161,8 +161,8 @@ This will compress every file in the original SSBT and write a new bloomtree usi
 \begin{itemize}
 \item \textbf{max-filters} is an option that defines the total number of filters that can be loaded at one time into memory. The default is set to 100 filters in memory. 
 \item \textbf{threshold (t)} is a float between 0 and 1 that defines the proportion of query k-mers that must be present in any bloom filter to define a ``hit``. The default value assumes a valid hit contains 80\% of exact-matching k-mers.
-\item \textbf{leaf-only} has two possible values. (0) is the default value and searches the entire SSBT while (1) ignores the tree structure and queries just the leaf nodes of the tree in a naive search.
-\item \textbf{weighted} is an optional text file that contains space-separated floats which define in-order weights on the kmer starting at that index in the queryfile. For a length n query, only n-k weights must be provided.
+%\item \textbf{leaf-only} has two possible values. (0) is the default value and searches the entire SSBT while (1) ignores the tree structure and queries just the leaf nodes of the tree in a naive search.
+%\item \textbf{weighted} is an optional text file that contains space-separated floats which define in-order weights on the kmer starting at that index in the queryfile. For a length n query, only n-k weights must be provided.
 \item \textbf{bloomtreefile} is the location of the SSBT structure file written by the ``build'' function or the compressed SSBT structure file written by the ``compressed'' function. Using the ``compressed'' file results in a substantially faster query time.
 \item \textbf{queryfile} is the location of a text file containing line-separated full-length sequences.
 \item \textbf{outfile} is the location of the [compressed] SSBT structure file being written
