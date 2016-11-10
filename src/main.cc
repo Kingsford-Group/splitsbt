@@ -24,7 +24,7 @@ std::string out_file;
 std::string jfbloom_file;
 std::string bvfile1, bvfile2;
 std::string of_sim, of_dif;
-int sim_type=0;
+int sim_type=2;
 std::string bloom_storage;
 int leaf_only;
 std::string weighted="";
@@ -157,12 +157,12 @@ int process_options(int argc, char* argv[]) {
         out_file = argv[optind+2];
 
     } else if (command == "build") {
-        if (optind >= argc-4) print_usage();
+        if (optind >= argc-3) print_usage();
         hashes_file = argv[optind+1];
         query_file = argv[optind+2];
         out_file = argv[optind+3];
         //bloom_storage = argv[optind+4];
-        sim_type = atoi(argv[optind+4]);
+        //sim_type = atoi(argv[optind+4]);
 
     } else if (command == "hashes") {
         if (optind >= argc-2) print_usage();
@@ -281,6 +281,7 @@ int main(int argc, char* argv[]) {
 
     } else if (command == "build") {
         std::cerr << "Building..." << std::endl;
+        std::cerr << "With build type " << sim_type << std::endl;
         std::vector<std::string> leaves = read_filter_list(query_file); //not a query file
         //build_bt_from_jfbloom(leaves, out_file, parallel_level);
         dynamic_splitbuild(hashes_file, leaves, out_file, sim_type); //std::stoi(sim_type));
