@@ -316,15 +316,16 @@ void compressedSBF::load() {
     sim_bits = new sdsl::rrr_vector<255>();
     std::string fn = this->get_sim_name();
     sdsl::load_from_file(*sim_bits, fn);
+    sim_size = sim_bits->size();
 
     if (fn.substr(fn.size()-19) == "union.sim.bf.bv.rrr"){
         dif_bits = new sdsl::rrr_vector<255>();
         sdsl::load_from_file(*dif_bits, this->get_dif_name());
+        dif_size = dif_bits->size();
     } else {
         sdsl::rank_support_rrr<1,255> rbv_sim(sim_bits);
-        uint64_t sim_size = sim_bits->size();
-        uint64_t dif_size = sim_size-rbv_sim(sim_size);
-        dif_bits = new sdsl::rrr_vector<255>(dif_size);
+        dif_size = sim_size-rbv_sim(sim_size);
+        //dif_bits = new sdsl::rrr_vector<255>(dif_size);
     }
 }
 
@@ -344,9 +345,9 @@ uint64_t compressedSBF::size() const{
 
 uint64_t compressedSBF::size(int type) const{
     if (type == 0){
-        return sim_bits->size();
+        return sim_size;//sim_bits->size();
     } else if (type == 1){
-        return dif_bits->size();
+        return dif_size;//dif_bits->size();
     }
     DIE("Only two filter types (sim = 0, dif = 1)");
 }
@@ -358,6 +359,7 @@ int compressedSBF::operator[](uint64_t pos) const{
         return contains;
     }
 
+    if (dif_bits == nullptr) return 0;
     sdsl::rank_support_rrr<1, 255> rbv_sim(sim_bits);   
     uint64_t offset = rbv_sim.rank(pos);
     assert(pos-offset >= 0);
@@ -385,6 +387,7 @@ bool compressedSBF::contains(const jellyfish::mer_dna & m, int type) const {
         if(type == 0){
             if ((*sim_bits)[pos] == 0) return false;
         } else if (type == 1){
+            if (dif_bits == nullptr) return false;
             uint64_t offset = rbv_sim.rank(pos);
             assert(pos-offset>=0);
             if ((*dif_bits)[pos-offset] == 0) return false;
@@ -399,6 +402,7 @@ bool compressedSBF::contains(const size_t pos, int type) const{
     if(type == 0){
         if ((*sim_bits)[pos] == 0) return false;
     } else if (type == 1){
+        if (dif_bits == nullptr) return false;
         sdsl::rank_support_rrr<1, 255> rbv_sim(sim_bits);
         size_t offset = rbv_sim.rank(pos);
         assert(pos>= offset); //non-negative boundary

@@ -92,6 +92,8 @@ public:
 //protected:
     sdsl::rrr_vector<255>* sim_bits;
     sdsl::rrr_vector<255>* dif_bits;
+    uint64_t sim_size;
+    uint64_t dif_size;
 };
 
 class UncompressedBF : public BF {
