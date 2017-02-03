@@ -172,7 +172,7 @@ int process_options(int argc, char* argv[]) {
     } else if (command == "count") {
         if (optind >= argc-4) print_usage();
         hashes_file = argv[optind+1];
-        bf_size = atol(argv[optind+2]);
+        bf_size = atof(argv[optind+2]);
         query_file = argv[optind+3];
         out_file = argv[optind+4];
     } else if (command == "compress") {
