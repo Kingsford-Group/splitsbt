@@ -62,6 +62,22 @@ void draw_bt(BloomTree* root, std::string outfile) {
     out << "}" << std::endl;
 }
 
+void popcount_bt(BloomTree* root) {
+	if (root == nullptr) return;
+
+	std::cerr << root->bf()->count_ones(0) << " " << root->bf()->size(0) << ", ";
+
+	if (root->child(0)) {
+        std::cerr << root->bf()->count_ones(1) << " " << root->bf()->size(1) << std::endl;
+		popcount_bt(root->child(0));
+	} else{
+        std::cerr << std::endl;
+    }
+	if (root->child(1)){
+		popcount_bt(root->child(1));
+	}
+}
+
 void compress_bt(BloomTree* root) {
 	if (root == nullptr) return;
 
@@ -73,6 +89,18 @@ void compress_bt(BloomTree* root) {
 	if (root->child(1)){
 		compress_bt(root->child(1));
 	}
+}
+
+void compress_splitbt(BloomTree* root, sdsl::bit_vector* noninfo){
+    root->bf()->compress(noninfo);
+
+    if (root->child(0)){
+        //update noninformative bits
+        root->bf()->get_noninfo(noninfo);
+        compress_splitbt(root->child(0),noninfo);
+        root->bf()->get_noninfo(noninfo);
+        compress_splitbt(root->child(1),noninfo);
+    }
 }
 
 void compress_splitbt(BloomTree* root, BF* rbf){
@@ -94,8 +122,10 @@ void compress_splitbt(BloomTree* root, BF* rbf){
     // Test whether compression is memory leak
     root->bf()->compress(remove_bf);
 
+    // Adjust rbf for next level
     // If we are a leaf, no need to adjust filter
     if(root->child(0)){
+        //debug
         if (root->name()==root->child(0)->name()){
             DIE("Node cannot be its own parent!");
         }

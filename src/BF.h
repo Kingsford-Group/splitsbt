@@ -49,13 +49,15 @@ public:
     virtual uint64_t count_ones(int type) const;
     virtual void compress();
     virtual void compress(BF* rm);
+    virtual void compress(sdsl::bit_vector* noninfo);
 
     virtual BF* sim_with(const std::string & new_name, const BF* f2) const;
     virtual void sim_into(const BF* f2);
 
     virtual BF* dif_with(const std::string & new_name, const BF* f2) const;
     virtual void dif_into(const BF* f2);
-    
+   
+    virtual void get_noninfo(sdsl::bit_vector* noninfo); 
     virtual void update_mask(const BF* update);
     virtual void update_mask(const BF* u1, const BF* u2);
     virtual void print();
@@ -83,6 +85,7 @@ public:
     virtual uint64_t size(int type) const;
 
     virtual int operator[](uint64_t pos) const;
+    virtual uint64_t count_ones(int type) const;
 
     virtual bool contains(const jellyfish::mer_dna & m, int type) const;
     virtual bool contains(const size_t pos, int type) const;
@@ -124,7 +127,7 @@ public:
     virtual BF* dif_with(const std::string & new_name, const BF* f2) const;
     virtual void dif_into(const BF* f2);
 
-protected:
+//protected:
     sdsl::bit_vector* bv;
 };
 
@@ -134,6 +137,7 @@ public:
     SBF(const std::string & filename, HashPair hp, int nh, uint64_t size = 0);
     SBF(const std::string & filename, BF* copy);
     SBF(const std::string & filename, BF* mask, BF* copy);
+    SBF(const std::string & filename, BF* copy, sdsl::bit_vector* noninfo);
     virtual ~SBF();
 
     virtual void load();
@@ -163,6 +167,7 @@ public:
     virtual uint64_t count_ones(int type) const;
     virtual void compress();
     virtual void compress(BF* rm);
+    virtual void compress(sdsl::bit_vector* noninfo);
     // Consider using bit_vectors for both.
     // Would like for both of these to be constant but having problems
     virtual void remove_duplicate(BF* f2);
@@ -180,6 +185,7 @@ public:
     virtual BF* dif_with(const std::string & new_name, const BF* f2) const;
     virtual void dif_into(const BF* f2);
 
+    virtual void get_noninfo(sdsl::bit_vector* noninfo);
     virtual void update_mask(const BF* update);
     virtual void update_mask(const BF* u1, const BF* u2);
     virtual void print();

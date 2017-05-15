@@ -137,7 +137,9 @@ int BF::operator[](uint64_t pos) const {
 void BF::load() {
     // read the actual bits
     bits = new sdsl::rrr_vector<255>();
-    sdsl::load_from_file(*bits, filename);
+    if (!sdsl::load_from_file(*bits, filename)){
+        std::cerr << "Failed to load: " << filename << std::endl;
+    }
 }
 
 void BF::save() {
@@ -210,6 +212,10 @@ void BF::compress(BF* rm){
     DIE("Cant compress rrr further with existing code base");
 }
 
+void BF::compress(sdsl::bit_vector* noninfo){
+    DIE("Not implemented");
+}
+
 BF* BF::sim_with(const std::string & new_name, const BF* f2) const{
     assert(bits->size() == f2->size());
 
@@ -264,6 +270,10 @@ void BF::dif_into(const BF* f2){
     DIE("not yet implemented");
 }
 
+void BF::get_noninfo(sdsl::bit_vector* noninfo){
+    DIE("not implemented");
+}
+
 void BF::update_mask(const BF* update){
     DIE("not implemented");
 }
@@ -315,12 +325,16 @@ void compressedSBF::load() {
 
     sim_bits = new sdsl::rrr_vector<255>();
     std::string fn = this->get_sim_name();
-    sdsl::load_from_file(*sim_bits, fn);
+    if (!sdsl::load_from_file(*sim_bits, fn)){
+        std::cerr << "Failed to load: " << fn << std::endl;
+    }
     sim_size = sim_bits->size();
 
     if (fn.substr(fn.size()-19) == "union.sim.bf.bv.rrr"){
         dif_bits = new sdsl::rrr_vector<255>();
-        sdsl::load_from_file(*dif_bits, this->get_dif_name());
+        if(!sdsl::load_from_file(*dif_bits, this->get_dif_name())){
+            std::cerr << "Failed to load: " << this->get_dif_name() << std::endl;
+        }
         dif_size = dif_bits->size();
     } else {
         sdsl::rank_support_rrr<1,255> rbv_sim(sim_bits);
@@ -366,6 +380,40 @@ int compressedSBF::operator[](uint64_t pos) const{
     return (*dif_bits)[pos-offset];
 }
 
+uint64_t compressedSBF::count_ones(int type) const {
+    // sim type ==0
+    if (type == 0) {
+        /*uint64_t* sim_data = sim->data();
+        sdsl::bit_vector::size_type len = size(0)>>6;
+        uint64_t count_sim=0;
+        for (sdsl::bit_vector::size_type p =0; p < len; ++p) {
+            int pc = popcount(*sim_data);
+            DIE_IF(pc != __builtin_popcountl(*sim_data), "pocountl and us disagree about popcount (dif)");
+            sim_data++;
+            count_sim += pc;
+        }
+        */
+        sdsl::rank_support_rrr<1,255> rbv(sim_bits);
+        //DIE_IF(rbv.rank(size()) != count_sim, "SDSL and us disagree about number of 1s (dif)");
+        return rbv.rank(size(0));//count_sim;
+    } else if (type == 1) {
+        /*
+        uint64_t* dif_data = dif->data();
+        sdsl::bit_vector::size_type len = size(1)>>6;
+        uint64_t count_dif=0;
+        for (sdsl::bit_vector::size_type p =0; p < len; ++p) {
+            int pc = popcount(*dif_data);
+            //DIE_IF(pc != __builtin_popcountl(*dif_data), "pocountl and us disagree about popcount (dif)");
+            dif_data++;
+            count_dif += pc;
+        }*/
+        sdsl::rank_support_rrr<1,255> rbv(dif_bits);
+        //DIE_IF(rbv.rank(size(1)) != count_dif, "SDSL and us disagree about number of 1s (dif)");
+        return rbv.rank(size(1));//count_dif;
+    }
+    DIE("Invalid type specified!");
+    return -1;
+}
 bool compressedSBF::contains(const jellyfish::mer_dna & m, int type) const {
     //std::cout << "TESTING STUFF: " << m.to_str() << std::endl;
     std::string temp = m.to_str();
@@ -480,7 +528,9 @@ void UncompressedBF::load() {
     // read the actual bits
     assert(bv == nullptr);
     bv = new sdsl::bit_vector();
-    sdsl::load_from_file(*bv, filename);
+    if (!sdsl::load_from_file(*bv, filename)){
+        std::cerr << "Failed to load: " << filename << std::endl;
+    }
 }
 
 void UncompressedBF::save() {
@@ -761,7 +811,104 @@ SBF::SBF(const std::string & f, BF* copy) :
     }
 }
 
-// Resize constructor - BF* a is the 
+SBF::SBF(const std::string & f, BF* copy, sdsl::bit_vector* noninfo) :
+    BF(f, copy->get_hashes(), copy->get_num_hash()),
+    sim(nullptr),
+    dif(nullptr) 
+{
+    // Original bf being copied
+    const SBF* orig = dynamic_cast<SBF*>(copy);
+    if (orig == nullptr) {
+        DIE("BF being copied must be a SBF");
+    }
+
+    // *** Initialize support vectors ***
+    sdsl::rank_support_v<> rbv_noninfo(noninfo);
+    sdsl::rank_support_v<> rbv_orig_sim(orig->sim);
+   
+    //Determine size of new sim [full_length - noninformative]
+    uint64_t full_length = orig->size();
+    uint64_t noninformative = rbv_noninfo.rank(noninfo->size());
+    assert(noninfo->size() == full_length);
+    uint64_t new_sim_size = full_length-noninformative;
+    std::cerr << "new_sim_size: " << new_sim_size << std::endl;
+    
+ 
+    sim = new sdsl::bit_vector(new_sim_size);
+
+    // Key pointers
+    uint64_t* new_sim_ptr = this->sim->data();
+    uint64_t* noninfo_ptr = noninfo->data();
+    uint64_t* orig_sim_ptr = orig->sim->data();
+    
+    //Initialize bit pointer operators
+    bit_pointer new_sim_bptr = new_sim_ptr;
+    const_bit_pointer noninfo_bptr = noninfo_ptr;
+    const_bit_pointer orig_sim_bptr = orig_sim_ptr;
+    sdsl::bit_vector::size_type len = full_length;
+    sdsl::bit_vector::size_type p = 0;
+    uint64_t new_sim_counter = 0;
+
+    for (; (p < len); ++p){
+        if(*noninfo_bptr++){ //Skip if noninfo bit is 1
+            (*orig_sim_bptr++);
+        } else{
+            if (new_sim_counter < new_sim_size){
+                (*new_sim_bptr++) = (*orig_sim_bptr++);
+                new_sim_counter++;
+            } else {
+                DIE("Mask extended beyond allocated sim space.");
+            }
+        }
+    }
+    
+    //Check that we have allocated exactly as much space as we needed
+    assert(new_sim_counter == new_sim_size);
+                     
+    //Check number of ones in new sim
+    sdsl::rank_support_v<> rbv_new_sim(sim);
+    uint64_t new_sim_ones = rbv_new_sim(sim->size());
+    std::cerr << "Num ones in new sim: " << new_sim_ones << std::endl;
+
+    //Determine size of new dif [full_length - noninformative - ones-in-new-sim]
+    uint64_t new_dif_size = full_length - noninformative - new_sim_ones;
+    std::cerr << "new_dif_size: " << new_dif_size << std::endl;
+
+    dif = new sdsl::bit_vector(new_dif_size);
+
+    //Key pointers [and reset old ones]
+    uint64_t* orig_dif_ptr = orig->dif->data();      
+    uint64_t* new_dif_ptr = this->dif->data();        
+    noninfo_ptr = noninfo->data();
+    orig_sim_ptr = orig->sim->data();
+    
+    //Bit pointer operators 
+    const_bit_pointer orig_dif_bptr = orig_dif_ptr;
+    bit_pointer new_dif_bptr = new_dif_ptr;
+    noninfo_bptr = noninfo_ptr;
+    orig_sim_bptr = orig_sim_ptr;
+    
+    p=0;
+    uint64_t new_dif_counter = 0;   
+
+    for (; (p < len); ++p){
+        if ((*noninfo_bptr++) | (*orig_sim_bptr++)){ //skip if one in mask or sim
+            (*orig_dif_bptr++);    
+        } else {
+            if(new_dif_counter < new_dif_size){
+                (*new_dif_bptr++)=(*orig_dif_bptr++);
+                new_dif_counter++;
+            } else{ DIE("New sim extended beyond allocated dif space. (non-zero)");}
+        }
+    }
+    //Same checks as sim
+    assert(new_dif_counter == new_dif_size);
+    std::cerr << "Check dif_counter: " << new_dif_counter << std::endl; 
+    sdsl::rank_support_v<> rbv_new_dif(dif);
+    std::cerr << "Num ones in new dif: " << rbv_new_dif(dif->size()) << std::endl;
+}
+
+// Resize constructor - BF* rm is the mask, BF* o is the original
 SBF::SBF(const std::string & f, BF* rm, BF* o) :
     BF(f, o->get_hashes(), o->get_num_hash()),
     sim(nullptr),
@@ -904,11 +1051,15 @@ void SBF::load() {
     
     sim = new sdsl::bit_vector();
     std::string fn = this->get_sim_name();    
-    sdsl::load_from_file(*sim, fn);
+    if (!sdsl::load_from_file(*sim, fn)){
+        std::cerr << "Failed to load: " << fn << std::endl;
+    }
 
     if (fn.substr(fn.size()-15) == "union.sim.bf.bv"){
         dif = new sdsl::bit_vector(); 
-        sdsl::load_from_file(*dif, this->get_dif_name());
+        if (!sdsl::load_from_file(*dif, this->get_dif_name())){
+            std::cerr << "Failed to load: " << this->get_dif_name() << std::endl;
+        }
     } else {
         dif = new sdsl::bit_vector(sim->size());
     }
@@ -1095,6 +1246,17 @@ void SBF::update_mask(const BF* u1, const BF* u2){
         remove_sim_ptr++; remove_dif_ptr++;
         update_sim_ptr++; 
         other_sim_ptr++; other_dif_ptr++;
+    }
+}
+
+void SBF::get_noninfo(sdsl::bit_vector* noninfo){
+    uint64_t* sim_ptr = this->sim->data();
+    uint64_t* dif_ptr = this->dif->data();
+    uint64_t* noninfo_ptr = noninfo->data();
+
+    sdsl::bit_vector::size_type len = size()>>6;
+    for (sdsl::bit_vector::size_type p = 0; p < len; ++p){
+        (*noninfo_ptr++) = (*sim_ptr++) | ~(*dif_ptr++);
     }
 }
 
@@ -1307,6 +1469,13 @@ void SBF::compress() {
 		std::cerr << "Compressed RRR diff vector is " << sdsl::size_in_mega_bytes(rrr_dif) << std::endl;
         sdsl::store_to_file(rrr_dif, this->get_dif_name()+".rrr");
     }
+}
+
+void SBF::compress(sdsl::bit_vector* noninfo){
+    std::string fn = this->get_sim_name();
+    SBF* comp_bf = new SBF(fn, this, noninfo);
+    comp_bf->compress();
+    delete comp_bf;
 }
 
 void SBF::compress(BF* rm){

@@ -82,7 +82,9 @@ void query_string(BloomTree* root, const std::string & q, std::vector<BloomTree*
 void query(BloomTree* root, const std::set<jellyfish::mer_dna> & q, std::vector<BloomTree*> & out);
 void check_bt(BloomTree* root);
 void draw_bt(BloomTree* root, std::string outfile);
+void popcount_bt(BloomTree* root);
 void compress_bt(BloomTree* root);
+void compress_splitbt(BloomTree* root, sdsl::bit_vector* noninfo);
 void compress_splitbt(BloomTree* root, BF* rbf); 
 void leaf_query_from_file(BloomTree* root, const std::string & fn, std::ostream & o);
 

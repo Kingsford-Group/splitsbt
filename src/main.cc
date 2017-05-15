@@ -5,6 +5,7 @@
 #include "BF.h"
 #include "util.h"
 #include "Count.h"
+#include "minhash.h"
 
 #include <string>
 #include <cstdlib>
@@ -294,8 +295,10 @@ int main(int argc, char* argv[]) {
         getline(in, header);
         std::vector<std::string> fields;
         SplitString(header, ',', fields);
-        SBF* remove_mask = new SBF("not_saved.txt", root->bf()->get_hashes(), root->bf()->get_num_hash(), root->bf()->size());
-        compress_splitbt(root, remove_mask);
+        sdsl::bit_vector* noninfo = new sdsl::bit_vector(root->bf()->size());
+        compress_splitbt(root, noninfo);
+        //SBF* remove_mask = new SBF("not_saved.txt", root->bf()->get_hashes(), root->bf()->get_num_hash(), root->bf()->size());
+        //compress_splitbt(root, remove_mask);
         write_compressed_bloom_tree(out_file, root, fields[1]);
     } else if (command == "split") {
         std::cerr << "Splitting..." << std::endl;
@@ -343,8 +346,15 @@ int main(int argc, char* argv[]) {
         //BF* bf2 = load_bf_from_file(bvfile2, *hp, nh);
         bf1->load();
         //bf2->load();
-
-        std::cerr << bf1->size(0) << " " << bf1->size(1) << std::endl;
+        UncompressedBF* ubf1 = dynamic_cast<UncompressedBF*>(bf1);
+        //std::cerr << bf1->size(0) << " " << bf1->size(1) << std::endl;
+        // WORKING ON THIS *******XXX****
+        //srand(0);
+        //for (uint64_t i =0; i < 100; i+=1){
+            //bitshift_hash(0,rand(),i);
+            //minhash(*(ubf1->bv), rand(), i);
+        //}
+        minhash_fast(*(ubf1->bv),0, 100);
         //std::cerr << bf2->size(0) << " " << bf2->size(1) << std::endl;
 
         //SBF* bf1 = new SBF(bvfile1, *hp, nh, 64);
@@ -374,7 +384,8 @@ int main(int argc, char* argv[]) {
         std::cerr << "Loading bloom tree topology: " << bloom_tree_file
             << std::endl;
         SplitBloomTree* root = read_split_bloom_tree(bloom_tree_file);
-        validate_SSBT(root);
+        //validate_SSBT(root);
+        popcount_bt(root);
 
         //HashPair hp = root->get_hashes();
         //int nh = root->get_num_hash();
