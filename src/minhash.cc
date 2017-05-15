@@ -2,7 +2,7 @@
 #include "minhash.h"
 #include "util.h"
 #include "bit_pointer.hpp"
-#include "xxHash-dev/xxhash.c"
+//#include "xxHash-dev/xxhash.c"
 
 using HashPair = jellyfish::hash_pair<jellyfish::mer_dna>;
 
