@@ -397,10 +397,11 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
     //std::cerr << "Num #1s (Curr): " << root->bf()->count_ones(0) << std::endl; 
     N->set_usage(1);
     while (T != nullptr) {
-        //std::cerr << "At node: " << T->name() << std::endl;
+        std::cerr << "At node: " << T->name() << std::endl;
         //set_usage protected = 1
         //set_usage unprotected = 0
         T->set_usage(1);//increment_usage();
+        T->bf(); // load bloomfilter
         if (T->num_children() == 0) {
             // this is the tricky case: T is currently a leaf, which means it
             // represents an SRA file, and so it has to stay a leaf. So what we
@@ -454,6 +455,7 @@ SplitBloomTree* insert_split_bloom_tree(SplitBloomTree* T, SplitBloomTree* N, in
             best_child = -1;
             for (int i = 0; i < 2; i++) {
                 T->child(i)->set_usage(1);//increment_usage();
+                T->child(i)->bf();
                 //std::cerr << "Child " << i << " number of ones = " << T->child(i)->bf()->count_ones(0) << std::endl;
                 uint64_t sim = T->child(i)->similarity(N,type);
                 //std::cerr << "Child " << i << " sim =" << sim << std::endl;
