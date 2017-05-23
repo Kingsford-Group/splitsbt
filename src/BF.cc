@@ -136,9 +136,11 @@ int BF::operator[](uint64_t pos) const {
 // read the bit vector and the matrices for the hash functions.
 void BF::load() {
     // read the actual bits
-    bits = new sdsl::rrr_vector<255>();
-    if (!sdsl::load_from_file(*bits, filename)){
-        std::cerr << "Failed to load: " << filename << std::endl;
+    if (bits == nullptr){
+        bits = new sdsl::rrr_vector<255>();
+        if (!sdsl::load_from_file(*bits, filename)){
+            std::cerr << "Failed to load: " << filename << std::endl;
+        }
     }
 }
 
@@ -322,24 +324,28 @@ void compressedSBF::load() {
     // read the actual bits
     assert(sim_bits == nullptr);
     assert(dif_bits == nullptr);
-
-    sim_bits = new sdsl::rrr_vector<255>();
+   
     std::string fn = this->get_sim_name();
-    if (!sdsl::load_from_file(*sim_bits, fn)){
-        std::cerr << "Failed to load: " << fn << std::endl;
-    }
-    sim_size = sim_bits->size();
-
-    if (fn.substr(fn.size()-19) == "union.sim.bf.bv.rrr"){
-        dif_bits = new sdsl::rrr_vector<255>();
-        if(!sdsl::load_from_file(*dif_bits, this->get_dif_name())){
-            std::cerr << "Failed to load: " << this->get_dif_name() << std::endl;
+    
+    if (sim_bits == nullptr){
+        sim_bits = new sdsl::rrr_vector<255>();
+        if (!sdsl::load_from_file(*sim_bits, fn)){
+            std::cerr << "Failed to load: " << fn << std::endl;
         }
-        dif_size = dif_bits->size();
-    } else {
-        sdsl::rank_support_rrr<1,255> rbv_sim(sim_bits);
-        dif_size = sim_size-rbv_sim(sim_size);
-        //dif_bits = new sdsl::rrr_vector<255>(dif_size);
+        sim_size = sim_bits->size();
+    } 
+    if (dif_bits == nullptr){
+        if (fn.substr(fn.size()-19) == "union.sim.bf.bv.rrr"){
+            dif_bits = new sdsl::rrr_vector<255>();
+            if(!sdsl::load_from_file(*dif_bits, this->get_dif_name())){
+                std::cerr << "Failed to load: " << this->get_dif_name() << std::endl;
+            }
+            dif_size = dif_bits->size();
+        } else {
+            sdsl::rank_support_rrr<1,255> rbv_sim(sim_bits);
+            dif_size = sim_size-rbv_sim(sim_size);
+            //dif_bits = new sdsl::rrr_vector<255>(dif_size);
+        }
     }
 }
 
@@ -526,10 +532,11 @@ UncompressedBF::~UncompressedBF() {
 
 void UncompressedBF::load() {
     // read the actual bits
-    assert(bv == nullptr);
-    bv = new sdsl::bit_vector();
-    if (!sdsl::load_from_file(*bv, filename)){
-        std::cerr << "Failed to load: " << filename << std::endl;
+    if(bv == nullptr){
+        bv = new sdsl::bit_vector();
+        if (!sdsl::load_from_file(*bv, filename)){
+            std::cerr << "Failed to load: " << filename << std::endl;
+        }
     }
 }
 
@@ -1048,20 +1055,22 @@ void SBF::load() {
     // read the actual bits
     //assert(sim == nullptr);
     //assert(dif == nullptr);
-    
-    sim = new sdsl::bit_vector();
-    std::string fn = this->get_sim_name();    
-    if (!sdsl::load_from_file(*sim, fn)){
-        std::cerr << "Failed to load: " << fn << std::endl;
-    }
-
-    if (fn.substr(fn.size()-15) == "union.sim.bf.bv"){
-        dif = new sdsl::bit_vector(); 
-        if (!sdsl::load_from_file(*dif, this->get_dif_name())){
-            std::cerr << "Failed to load: " << this->get_dif_name() << std::endl;
+    if (sim == nullptr){ 
+        sim = new sdsl::bit_vector();
+        std::string fn = this->get_sim_name();    
+        if (!sdsl::load_from_file(*sim, fn)){
+            std::cerr << "Failed to load: " << fn << std::endl;
         }
-    } else {
-        dif = new sdsl::bit_vector(sim->size());
+        if (dif == nullptr){
+            if (fn.substr(fn.size()-15) == "union.sim.bf.bv"){
+                dif = new sdsl::bit_vector(); 
+                if (!sdsl::load_from_file(*dif, this->get_dif_name())){
+                    std::cerr << "Failed to load: " << this->get_dif_name() << std::endl;
+                }
+            } else {
+                dif = new sdsl::bit_vector(sim->size());
+            }
+        }
     }
 }
 
