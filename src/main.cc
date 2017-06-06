@@ -198,6 +198,14 @@ int process_options(int argc, char* argv[]) {
         if (optind >= argc-2) print_usage();
         bloom_tree_file=argv[optind+1];
         out_file = argv[optind+2];//location not file
+    } else if (command == "filtersize") {
+        if (optind >= argc-2) print_usage();
+        hashes_file=argv[optind+1];
+        bvfile1=argv[optind+2];
+    } else if (command == "massfiltersize") {
+        if (optind >= argc-2) print_usage();
+        hashes_file=argv[optind+1];
+        bvfile1=argv[optind+2]; // this is really a list of filters
     }
     return optind;
 }
@@ -394,7 +402,31 @@ int main(int argc, char* argv[]) {
 
         //std::cerr << "Converting..." << std::endl;
         //convert_sbt_filters(root, cumul, out_file);
+    } else if (command == "filtersize"){
+        int nh;
+        HashPair* hp = get_hash_function(hashes_file, nh);
+        BF* bf1 = load_bf_from_file(bvfile1, *hp, nh);
+        bf1->load();
+        std::cerr << bf1->get_name() << ": " << bf1->size(0) << " " << bf1->size(1) << std::endl;
+    } 
+/*
+else if (command == "massfiltersize"){
+        int nh;
+        HashPair* hp = get_hash_function(hashes_file, nh);
+        ifstream myfile;
+        std::string fname;
+        myfile.open( bvfile1); 
+        if(myfile.is_open()){
+            while (!myfile.eof){
+                getline(myfile,fname);
+                BF* bf1 = load_bf_from_file(fname, *hp, nh);
+                bf1->load();
+
+                std::cerr << bf1->get_name() << ": " << bf1->size(0) << " " << bf1->size(1) << std::endl;
+            }
+        }
     }
+*/
     std::cerr << "Done." << std::endl;
 }
 
