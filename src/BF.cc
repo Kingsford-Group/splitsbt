@@ -1134,6 +1134,8 @@ BF* SBF::union_with(const std::string & new_name, const BF* f2) const {
     if (b == nullptr) {
         DIE("Can only union two SBF");
     }
+    assert(this->sim!=nullptr);
+    assert(b->sim!=nullptr);
     SBF* out = new SBF(new_name, hashes, num_hash);
     out->sim = sim_bv_fast(*this->sim, *b->sim); //sim filter is sim of two sim filters
     sdsl::bit_vector* new_diff = dif_bv_fast(*this->sim, *b->sim); //Dif filter is union of dif filters and new differences
@@ -1154,7 +1156,8 @@ void SBF::union_into(const BF* f2) {
     if (b == nullptr) {
         DIE("Can only union two SBF");
     }
-
+    assert(this->sim!=nullptr);
+    assert(b->sim!=nullptr);
     uint64_t* b1_sim_data = this->sim->data();
     uint64_t* b1_dif_data = this->dif->data();
     const uint64_t* b2_sim_data = b->sim->data();
