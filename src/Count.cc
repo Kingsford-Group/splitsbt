@@ -17,32 +17,38 @@
 /*==== COPIED FROM THE JF count_dump example ====*/
 
 typedef jellyfish::cooperative::hash_counter<jellyfish::mer_dna> mer_hash_type;
-typedef jellyfish::mer_overlap_sequence_parser<jellyfish::stream_manager<std::vector<std::string>::iterator > > sequence_parser_type;
+typedef jellyfish::stream_manager<std::vector<std::string>::iterator > stream_manager_type;
+typedef jellyfish::mer_overlap_sequence_parser<stream_manager_type> sequence_parser_type;
 typedef jellyfish::mer_iterator<sequence_parser_type, jellyfish::mer_dna> mer_iterator_type;
 
 
 class mer_counter : public jellyfish::thread_exec {
-  mer_hash_type&                    mer_hash_;
-  jellyfish::stream_manager<std::vector<std::string>::iterator > streams_;
-  sequence_parser_type              parser_;
-  const bool                        canonical_;
+  mer_hash_type&       mer_hash_;
+  sequence_parser_type parser_;
+  const bool           canonical_;
+  std::mutex           lock_;
 
 public:
   mer_counter(int nb_threads, mer_hash_type& mer_hash,
-              std::vector<std::string>::iterator file_begin, std::vector<std::string>::iterator file_end,
+              stream_manager_type  streams,
               bool canonical)
     : mer_hash_(mer_hash)
-    , streams_(file_begin, file_end)
-    , parser_(jellyfish::mer_dna::k(), streams_.nb_streams(), 3 * nb_threads, 4096, streams_)
+    , parser_(jellyfish::mer_dna::k(), streams.nb_streams(), 3 * nb_threads, 4096, streams)
     , canonical_(canonical)
   { }
 
   virtual void start(int thid) {
     mer_iterator_type mers(parser_, canonical_);
-
-    for( ; mers; ++mers)
+    size_t count = 0;
+    for( ; mers; ++mers) {
       mer_hash_.add(*mers, 1);
+        ++count;
+    }
     mer_hash_.done();
+    {
+    std::lock_guard<std::mutex> lck(lock_);
+    std::cerr << "thread " << thid << " added " << count << std::endl;
+    }
   }
 };
 
@@ -62,7 +68,11 @@ bool count(
     int num_threads,
     unsigned cutoff_count
     ) {
-    
+   
+#ifdef HAVE_HTSLIB
+    std::cerr << "HAVE_HTSLIB FLAG: TRUE" << std::endl;
+#endif
+ 
     // jellyfish default counting values
     const uint64_t hash_size = 10000000;
     const uint32_t num_reprobes = 126;
@@ -77,7 +87,16 @@ bool count(
     files.push_back(infilen);
 
     // count the kmers
-    mer_counter counter(num_threads, mer_hash, files.begin(), files.end(), canonical);
+    int count_type=0;
+    stream_manager_type streams;
+    if (infilen.substr(infilen.size()-4) == ".bam"){
+        std::cerr << "Processing bam file." << std::endl;
+        streams.sams(files.begin(), files.end());
+    } else {
+      std::cerr << "Processing fast[aq] file." << std::endl;
+      streams.paths(files.begin(), files.end());
+    }
+    mer_counter counter(num_threads, mer_hash, streams, canonical);
     counter.exec_join(num_threads);
 
     // build the BF
@@ -87,12 +106,16 @@ bool count(
     const auto jf_ary = mer_hash.ary();
     const auto end = jf_ary->end();
     std::cerr << "Right before cutoff count: " << cutoff_count << std::endl;
+    size_t in_hash = 0, in_bloom = 0;
     for(auto kmer = jf_ary->begin(); kmer != end; ++kmer) {
+        ++in_hash;
         auto& key_val = *kmer;
         if (key_val.second >= cutoff_count) {
             bf.add(key_val.first);
+            ++in_bloom;
         }
     }
+    std::cerr << "in hash: " << in_hash << " in blom: " << in_bloom << std::endl;
     bf.save();
     return true;
 }
@@ -106,7 +129,7 @@ bool split_count(
     int num_threads,
     unsigned cutoff_count
     ) {
-    
+
     // jellyfish default counting values
     const uint64_t hash_size = 10000000;
     const uint32_t num_reprobes = 126;
@@ -121,7 +144,8 @@ bool split_count(
     files.push_back(infilen);
 
     // count the kmers
-    mer_counter counter(num_threads, mer_hash, files.begin(), files.end(), canonical);
+    stream_manager_type streams(files.begin(), files.end());
+    mer_counter counter(num_threads, mer_hash, streams, canonical);
     counter.exec_join(num_threads);
 
     // build the BF

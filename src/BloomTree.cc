@@ -9,7 +9,7 @@
 #include <jellyfish/file_header.hpp>
 
 Heap<const BloomTree> BloomTree::bf_cache;
-int BF_INMEM_LIMIT = 10;
+int BF_INMEM_LIMIT = 30;
 
 // construct a bloom filter with the given filter backing.
 BloomTree::BloomTree(
@@ -148,7 +148,7 @@ void BloomTree::protected_cache(bool b) {
 // Loads the bloom filtering into memory
 bool BloomTree::load() const {
     if (bloom_filter == nullptr) {
-        //std::cerr << "Loading BF (reg BT): " << filename << std::endl;
+        //std::cerr << "Loading BF: " << filename << std::endl;
 
         // if the cache isn't protected from deleting elements, remove enough
         // elements so that there is 1 cache spot free (if the cache is

@@ -142,6 +142,7 @@ void BF::load() {
             std::cerr << "Failed to load: " << filename << std::endl;
         }
     }
+    std::cerr << "BF Load Size: " << bits->size() << std::endl;
 }
 
 void BF::save() {
@@ -347,6 +348,7 @@ void compressedSBF::load() {
             //dif_bits = new sdsl::rrr_vector<255>(dif_size);
         }
     }
+    std::cerr << "compressedSBT Load Size: " << sim_bits->size() << " " << dif_bits->size() << std::endl;
 }
 
 void compressedSBF::save() {
@@ -538,6 +540,7 @@ void UncompressedBF::load() {
             std::cerr << "Failed to load: " << filename << std::endl;
         }
     }
+    std::cerr << "Load_size: " << bv->size() << std::endl;
 }
 
 void UncompressedBF::save() {
@@ -547,6 +550,11 @@ void UncompressedBF::save() {
 
 
 uint64_t UncompressedBF::size() const {
+    return bv->size();
+}
+
+uint64_t UncompressedBF::size(int type) const{
+    std::cerr << "UncompressedBF does not have type." <<std::endl;
     return bv->size();
 }
 
@@ -1072,16 +1080,32 @@ void SBF::load() {
             }
         }
     }
+    std::cerr << "Load Size: " << sim->size() << " " << dif->size() << std::endl;
 }
 
 void SBF::save() {
-    std::cerr << "Saving BF to " << filename << std::endl;
-    sdsl::store_to_file(*sim, this->get_sim_name());
+    bool saved;
+    //std::cerr << "Saving BF to " << filename << " (should match) " << this->get_sim_name() << std::endl;
+    std::cerr << "Saving BF to " << this->get_sim_name() << std::endl;
+    saved = sdsl::store_to_file(*sim, this->get_sim_name());
     std::string fn = this->get_sim_name();    
+    if (saved==false){
+        std::cerr << "sim failed to save appropriately." << std::endl;
+    }
 
     if (fn.substr(fn.size()-15) == "union.sim.bf.bv"){
-        sdsl::store_to_file(*dif, this->get_dif_name());
+        saved = sdsl::store_to_file(*dif, this->get_dif_name());
+        if (saved==false){
+            std::cerr << "dif failed to save appropriately." << std::endl;
+        }
     }
+    std::cerr << "Saved with size: " << sim->size() << " " << dif->size() << std::endl;
+    
+    // ** DEBUG check to make sure saved file is properly sized in memory **
+    //sdsl::bit_vector* temp_sim = new sdsl::bit_vector();
+    //sdsl::load_from_file(*temp_sim, fn);
+    //std::cerr << "Saved file has size: " << temp_sim->size() << std::endl;
+    //delete temp_sim; 
 }
 
 uint64_t SBF::size() const {
@@ -1134,12 +1158,16 @@ BF* SBF::union_with(const std::string & new_name, const BF* f2) const {
     if (b == nullptr) {
         DIE("Can only union two SBF");
     }
-    assert(this->sim!=nullptr);
-    assert(b->sim!=nullptr);
+    //std::cerr << "Union_with: " << new_name << " " << filename << " " << f2->get_name() << " " << b->get_name() << std::endl;
+    //std::cerr << "this_size: " << this->sim->size() << " " << this->dif->size() << std::endl;
+    //std::cerr << "f2_size: " << b->sim->size() << " " << b->dif->size() << std::endl;
     SBF* out = new SBF(new_name, hashes, num_hash);
     out->sim = sim_bv_fast(*this->sim, *b->sim); //sim filter is sim of two sim filters
     sdsl::bit_vector* new_diff = dif_bv_fast(*this->sim, *b->sim); //Dif filter is union of dif filters and new differences
     sdsl::bit_vector* temp = union_bv_fast(*this->dif, *b->dif); //Dif filters can be directly unioned
+
+    //std::cerr << "new_dif size: " << new_diff->size() << std::endl;
+    //std::cerr << "temp size: " << temp->size() << std::endl;
     out->dif = union_bv_fast(*temp, *new_diff);
     delete temp;
     delete new_diff;
@@ -1156,8 +1184,8 @@ void SBF::union_into(const BF* f2) {
     if (b == nullptr) {
         DIE("Can only union two SBF");
     }
-    assert(this->sim!=nullptr);
-    assert(b->sim!=nullptr);
+    //std::cerr << "union_into: " << filename << " " << f2->get_name() << " " << b->get_name() << std::endl;
+
     uint64_t* b1_sim_data = this->sim->data();
     uint64_t* b1_dif_data = this->dif->data();
     const uint64_t* b2_sim_data = b->sim->data();
@@ -1711,6 +1739,7 @@ Misc Code elements
 //====================================================================//
 // union using 64bit integers
 sdsl::bit_vector* union_bv_fast(const sdsl::bit_vector & b1, const sdsl::bit_vector& b2) {
+    //std::cerr << "union sizes: " << b1.size() << " " << b2.size() << std::endl;
     assert(b1.size() == b2.size());
 
     sdsl::bit_vector* out = new sdsl::bit_vector(b1.size(), 0);
@@ -1742,6 +1771,7 @@ BF* load_bf_from_file(const std::string & fn, HashPair hp, int nh) {
 }
 
 sdsl::bit_vector* sim_bv_fast(const sdsl::bit_vector & b1, const sdsl::bit_vector& b2){
+    //std::cerr << "sim sizes: " << b1.size() << " " << b2.size() << std::endl;
     assert(b1.size() == b2.size());
 
     sdsl::bit_vector* out = new sdsl::bit_vector(b1.size(), 0);
@@ -1757,6 +1787,7 @@ sdsl::bit_vector* sim_bv_fast(const sdsl::bit_vector & b1, const sdsl::bit_vecto
 }
 
 sdsl::bit_vector* dif_bv_fast(const sdsl::bit_vector & b1, const sdsl::bit_vector& b2) {
+    //std::cerr << "dif sizes: " << b1.size() << " " << b2.size() << std::endl;
     assert(b1.size() == b2.size());
 
     sdsl::bit_vector* out = new sdsl::bit_vector(b1.size(), 0);

@@ -112,6 +112,7 @@ public:
     virtual int operator[](uint64_t pos) const;
     virtual void set_bit(uint64_t p);
     virtual uint64_t size() const;
+    virtual uint64_t size(int type) const;
     virtual uint64_t similarity(const BF* other, int type) const;
     virtual std::tuple<uint64_t, uint64_t> b_similarity(const BF* other) const;
     virtual BF* union_with(const std::string & new_name, const BF* f2) const;

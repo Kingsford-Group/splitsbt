@@ -198,14 +198,6 @@ int process_options(int argc, char* argv[]) {
         if (optind >= argc-2) print_usage();
         bloom_tree_file=argv[optind+1];
         out_file = argv[optind+2];//location not file
-    } else if (command == "sbthash") {
-        if (optind >= argc-2) print_usage();
-        hashes_file = argv[optind+1];
-        bvfile1=argv[optind+2];
-    } else if (command == "minhash") {
-        if (optind >= argc-2) print_usage();
-        hashes_file = argv[optind+1];
-        bvfile1=argv[optind+2]; 
     } else if (command == "filtersize") {
         if (optind >= argc-2) print_usage();
         hashes_file=argv[optind+1];
@@ -269,7 +261,8 @@ int main(int argc, char* argv[]) {
         std::cerr << "Computing Sim..." << std::endl;
         uint64_t test = bf1->similarity(bf2, sim_type);
 	//std::tuple<uint64_t, uint64_t> sim = bf1->b_similarity(bf2);
-	std::cout << "Temphead: " << test << std::endl;
+	std::cerr << "Done " << std::endl;
+	std::cout << test << std::endl;
 	//std::cout << bf1->size() << " " << std::get<0>(sim) << " " << std::get<1>(sim) << std::endl;
 
 	//uint64_t sim = bf1->similarity(bf2);
@@ -292,8 +285,9 @@ int main(int argc, char* argv[]) {
     } else if (command == "count") {
         int nh;
         HashPair* hp = get_hash_function(hashes_file, nh);
-	std::cerr << "Cutoff Count: " << cutoff_count << std::endl;
-        split_count(query_file, out_file, *hp, nh, bf_size, num_threads, cutoff_count);
+	    std::cerr << "Cutoff Count: " << cutoff_count << std::endl;
+        count(query_file, out_file, *hp, nh, bf_size, num_threads, cutoff_count);
+        //split_count(query_file, out_file, *hp, nh, bf_size, num_threads, cutoff_count);
 
     } else if (command == "build") {
         std::cerr << "Building..." << std::endl;
@@ -326,25 +320,26 @@ int main(int argc, char* argv[]) {
         bf1->load();
         bf2->load();
         std::cerr << "Count ones" << std::endl;
-        std::cerr << bf1->count_ones(0) << " " << bf1->count_ones(1) << std::endl;
-        std::cerr << bf2->count_ones(0) << " " << bf1->count_ones(1) << std::endl;
-        SBF* remove_mask = new SBF(of_dif, *hp, nh, bf1->size());
-        std::cerr << "empty mask created" << std::endl;
-        remove_mask->update_mask(bf2);
+        std::cerr << bf1->count_ones() << " " << bf2->count_ones() << std::endl;
+        //std::cerr << bf1->count_ones(0) << " " << bf1->count_ones(1) << std::endl;
+        //std::cerr << bf2->count_ones(0) << " " << bf1->count_ones(1) << std::endl;
+        //SBF* remove_mask = new SBF(of_dif, *hp, nh, bf1->size());
+        //std::cerr << "empty mask created" << std::endl;
+        //remove_mask->update_mask(bf2);
 
-        std::cerr << remove_mask->count_ones(0) << " " << remove_mask->size(0) << std::endl;
-        std::cerr << remove_mask->count_ones(1) << " " << remove_mask->size(1) << std::endl;
+        //std::cerr << remove_mask->count_ones(0) << " " << remove_mask->size(0) << std::endl;
+        //std::cerr << remove_mask->count_ones(1) << " " << remove_mask->size(1) << std::endl;
  
         //sdsl::util::set_random_bits(*(remove_mask->sim));
         //SBF* sbf1 = dynamic_cast<SBF*>(bf1);
         //sdsl::util::_set_zero_bits(*(sbf1->sim));
-        bf1->compress(remove_mask);
+        //bf1->compress(remove_mask);
 
-        SBF* outbf = new SBF(of_sim, remove_mask, bf1);
+        //SBF* outbf = new SBF(of_sim, remove_mask, bf1);
 
-        std::cerr << outbf->count_ones(0) << " " << outbf->size(0) << std::endl;
-        std::cerr << outbf->count_ones(1) << " " << outbf->size(1) << std::endl;
-        outbf->save();
+        //std::cerr << outbf->count_ones(0) << " " << outbf->size(0) << std::endl;
+        //std::cerr << outbf->count_ones(1) << " " << outbf->size(1) << std::endl;
+        //outbf->save();
         //UncompressedBF sim_bf(of_sim, *hp, nh, bf1->size());
         //UncompressedBF dif_bf(of_dif, *hp, nh, bf1->size());
         //BF* sim_bf = bf1->sim_with(of_sim, bf2);
@@ -409,34 +404,12 @@ int main(int argc, char* argv[]) {
 
         //std::cerr << "Converting..." << std::endl;
         //convert_sbt_filters(root, cumul, out_file);
-    } else if (command == "minhash"){
-        int nh;
-        HashPair* hp = get_hash_function(hashes_file, nh);
-        BF* bf1 = load_bf_from_file(bvfile1, *hp, nh);
-        bf1->load();
-        UncompressedBF* ubf1 = dynamic_cast<UncompressedBF*>(bf1);
-        //std::cerr << bf1->size(0) << " " << bf1->size(1) << std::endl;
-        minhash_fast(*(ubf1->bv),0, 100); 
-    } else if (command == "sbthash"){
-        int nh;
-        HashPair* hp = get_hash_function(hashes_file, nh);
-        BF* bf1 = load_bf_from_file(bvfile1, *hp, nh);
-        bf1->load();
-        UncompressedBF* ubf1 = dynamic_cast<UncompressedBF*>(bf1);
-        //std::cerr << bf1->size(0) << " " << bf1->size(1) << std::endl;
-        uint64_t outarray[100];
-        sbthash(*(ubf1->bv),outarray);
-        
-        for (uint64_t i=0; i < 100; i++){
-            std::cerr << "Temphead: " << i << " " << outarray[i] << std::endl;
-        }
     } else if (command == "filtersize"){
         int nh;
         HashPair* hp = get_hash_function(hashes_file, nh);
         BF* bf1 = load_bf_from_file(bvfile1, *hp, nh);
         bf1->load();
-        std::cerr << bf1->get_name() << ": " << bf1->size() << std::endl;//<< " " << bf1->size(1) << std::endl;
-        std::cerr << bf1->count_ones() << std::endl;
+        std::cerr << bf1->get_name() << ": " << bf1->size(0) << " " << bf1->size(1) << std::endl;
     } 
 /*
 else if (command == "massfiltersize"){

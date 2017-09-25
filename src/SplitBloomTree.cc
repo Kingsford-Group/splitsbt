@@ -154,7 +154,7 @@ void SplitBloomTree::union_into(const SplitBloomTree* other) {
         DIE("Split Bloom Filter bf() should be SBF.");
     }
     // new differences are things which were similar at this node until other was added to the tree.
-    // OR ARE BITS WHICH ARE NEW TO THE TREE SOURCED FROM OTHER_BF
+    // BITS WHICH ARE NEW TO THE TREE SOURCED FROM OTHER_BF ARE ADDED TO THE APPROPRIATE CHILD LATER
     sdsl::bit_vector* new_dif = my_bf->calc_new_dif_bv(other_bf); 
 
     // After determing what is different we can then perform the original union.
