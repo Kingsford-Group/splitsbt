@@ -227,14 +227,18 @@ int main(int argc, char* argv[]) {
 
         std::cerr << "Querying..." << std::endl;
         std::ofstream out(out_file);
-	if (leaf_only == 1){
-		leaf_query_from_file(root, query_file, out);
-	} else if (weighted!="") {
-		std::cerr << "Weighted query \n";
-		batch_weightedquery_from_file(root, query_file, weighted, out);	
-	} else {
+
+        batch_splitquery_from_file(root, query_file, out);
+/*
+    	if (leaf_only == 1){
+	    	leaf_query_from_file(root, query_file, out);
+    	} else if (weighted!="") {
+	    	std::cerr << "Weighted query \n";
+		    batch_weightedquery_from_file(root, query_file, weighted, out);	
+    	} else {
 	        batch_query_from_file(root, query_file, out);
-	}
+    	}
+*/
 
     } else if (command == "draw") {
         std::cerr << "Drawing tree in " << bloom_tree_file << " to " << out_file << std::endl;

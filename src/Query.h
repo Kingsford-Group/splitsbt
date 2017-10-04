@@ -6,6 +6,7 @@
 #include <vector>
 #include <list>
 #include <iostream>
+#include <iterator>
 
 #include "BloomTree.h"
 #include "SplitBloomTree.h"
@@ -15,6 +16,17 @@ extern float QUERY_THRESHOLD;
 std::vector<size_t> vector_hash_conversion(BF* root, std::vector<jellyfish::mer_dna> v);
 
 struct QueryInfo {
+    QueryInfo(){}
+
+    QueryInfo(BF* root, const std::string & q, const float qt){
+        query = q;
+        query_kmers = vector_hash_conversion(root, vector_kmers_in_string(q));
+        total_kmers = query_kmers.size();
+        tail_index=total_kmers-1;
+        matched_kmers=0;
+        q_thresh=qt;
+    }
+
     QueryInfo(BF* root, const std::string & q) : 
     query(q), 
     query_kmers(vector_hash_conversion(root, vector_kmers_in_string(q))),
@@ -71,7 +83,9 @@ struct QueryInfo {
     int total_kmers;
     int tail_index;
     int matched_kmers;
+    float q_thresh = QUERY_THRESHOLD;
 };
+
 
 using QuerySet = std::list<QueryInfo*>;
 
@@ -87,5 +101,36 @@ void compress_bt(BloomTree* root);
 void compress_splitbt(BloomTree* root, sdsl::bit_vector* noninfo);
 void compress_splitbt(BloomTree* root, BF* rbf); 
 void leaf_query_from_file(BloomTree* root, const std::string & fn, std::ostream & o);
+
+void batch_splitquery_from_file(BloomTree* root, const std::string & fn, std::ostream & o);
+
+std::vector<std::vector<std::string> > splitQuery(const std::string &s);
+
+// type == 0 ; contains
+// type == 1 ; does not contain
+struct splitQueryInfo {
+    splitQueryInfo(BF* root, const std::string & sq, int t){
+        type = t;
+
+        std::vector<std::vector<std::string> > parsed_sq = splitQuery(sq);
+        //partial_queries.resize(parsed_sq.size());
+        int count = 0;
+        for (auto & psq : parsed_sq){
+            const std::string temps = psq[0];
+            const float tempf = std::stof(psq[1]);
+            partial_queries.emplace_back(new QueryInfo(root, temps, tempf));
+            //partial_queries[count]=QueryInfo(root, temps, tempf);
+            //std::copy((partial_queries[count]).query_kmers.begin(), partial_queries[count].query_kmers.end(), std::inserter(total_kmers, total_kmers.end() ) );
+            count++;
+        } 
+    }
+    std::set<size_t> total_kmers;
+    QuerySet partial_queries;
+    //std::vector<QueryInfo> partial_queries;
+    int type;
+};
+
+using splitQuerySet = std::list<splitQueryInfo*>;
+
 
 #endif

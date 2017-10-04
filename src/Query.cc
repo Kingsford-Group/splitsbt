@@ -274,7 +274,7 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
     }
     //std::cerr << root->name() << std::endl;
     std::cerr << "Total weight: " << c << ", thresh: " << QUERY_THRESHOLD << ", maxkmer: " << q->total_kmers << std::endl;
-    return (c >= QUERY_THRESHOLD * q->total_kmers);
+    return (c >= q->q_thresh * q->total_kmers);
 }
 
 // recursively walk down the tree, proceeding to children only
@@ -670,6 +670,76 @@ void batch_query_from_file(
     }
 }
 
+
+// split on line
+// split on '+'/'-'
+void batch_splitquery_from_file(
+    BloomTree* root, 
+    const std::string & fn,
+    std::ostream & o
+) { 
+    // read in the query lines from the file.
+    std::string line;
+    splitQuerySet sqs;
+    std::ifstream in(fn);
+    DIE_IF(!in.good(), "Couldn't open query file.");
+    std::size_t n = 0;
+    while (getline(in, line)) {
+        line = Trim(line);
+        // This boundary should be adjusted but really matters later
+        if (line.size() < jellyfish::mer_dna::k()) continue;
+        
+        std::size_t left_end = 0;
+        std::size_t right_end = 0;
+        std::size_t index = 0;
+        int next_type = 0;
+        std::stringstream ss(line);
+        char c;
+        while (ss >> c){
+            if (c == '+'){
+                left_end = right_end;
+                right_end = index;
+                sqs.emplace_back(new splitQueryInfo(root->bf(), line.substr(left_end, right_end-left_end+1),next_type));
+                next_type = 0;
+                n++;
+            } else if (c == '-'){
+                left_end = right_end;
+                right_end = index;
+                sqs.emplace_back(new splitQueryInfo(root->bf(), line.substr(left_end, right_end-left_end+1),next_type));
+                next_type = 1;
+                n++;
+            }
+            index++;
+        }
+
+        left_end = right_end;
+        right_end = index;
+        //std::cerr << left_end << " " << right_end << std::endl;
+        //std::cerr << "Substr: " << line.substr(left_end, right_end-left_end+1) <<  std::endl;
+        sqs.emplace_back(new splitQueryInfo(root->bf(), line.substr(left_end, right_end-left_end+1),next_type));
+        n++;
+    }
+    in.close();
+    std::cerr << "Read " << n << " queries." << std::endl;
+
+    // batch process the queries
+    //query_batch(root, qs);
+    //print_query_results(qs, o);
+
+    // free the query info objects
+    int count = 0;
+    for (auto & p : sqs) {
+        std::cerr << "Query " << count << ": " << std::endl;
+        QuerySet qi = p->partial_queries;
+        for (auto & q : qi){
+            std::cerr << "Total kmers " << q->total_kmers << std::endl;
+            std::cerr << "query: " << q->query << std::endl;
+            delete q;
+        }
+        count++;
+        delete p;
+    }
+}
 void batch_weightedquery_from_file(
     BloomTree* root,
     const std::string & fn,
@@ -765,5 +835,67 @@ std::vector<size_t> vector_hash_conversion(BF* root, std::vector<jellyfish::mer_
     }
 
     return out;
+}
+
+
+// ********************* New code for split query parsing *********************
+//
+//
+template<typename QueryStruct>
+
+void split(const std::string &s, char delim, QueryStruct result) {
+    std::stringstream ss(s);
+    std::string item;
+    while (std::getline(ss, item, delim)) {
+        *(result++) = item;
+    }
+}
+
+std::vector<std::string> split(const std::string &s, char delim) {
+    std::vector<std::string> elems;
+    split(s, delim, std::back_inserter(elems));
+    return elems;
+}
+
+
+std::vector<std::vector<std::string> > splitQuery(const std::string &s){
+    auto k = jellyfish::mer_dna::k();
+    
+    std::stringstream ss(s);
+    std::stringstream subs;
+    char c;
+
+    std::vector<std::vector<std::string> > outVect;
+    std::back_insert_iterator<std::vector<std::vector<std::string> > > temp = std::back_inserter(outVect);
+    bool subs_b = false;
+    char delim = ',';
+
+    while (ss >> c){
+        if (c == ']'){
+            subs_b=false;
+            *(temp++) = split(subs.str(), delim);
+            subs.str("");
+        }
+
+        if (subs_b){ subs << c; }
+        if (c == '['){ subs_b=true; }
+
+    }
+
+    // ** Add k-1 nucleotides to each block except for last block **
+    for(int i = 0; i < outVect.size() - 1; i++){
+        std::string substring = outVect[i+1][0].substr(0,19);
+        outVect[i][0].append(substring);
+    }
+
+    /*
+    for (std::vector<std::vector<std::string> >::iterator it1 = outVect.begin(); it1 != outVect.end(); it1++){
+        for (std::vector<std::string>::iterator it2 = (*it1).begin(); it2 != (*it1).end(); it2++){
+            std::cerr << *it2 << ", " ;
+        }
+        std::cerr << std::endl;
+    }
+    */
+    return outVect;
 }
 
