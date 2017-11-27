@@ -128,6 +128,7 @@ public:
     virtual BF* dif_with(const std::string & new_name, const BF* f2) const;
     virtual void dif_into(const BF* f2);
 
+    virtual void merge_bf(BF* f1, BF* f2);
 //protected:
     sdsl::bit_vector* bv;
 };
@@ -175,6 +176,7 @@ public:
     virtual void add_different(const sdsl::bit_vector & new_dif);
     // Finds the elements which were in this->sim and not in f2->sim
     virtual sdsl::bit_vector* calc_new_dif_bv(const BF* f2);
+    virtual void merge_bf(BF* f1, BF* f2);
     // Accessor functions to perform simple and or xor operations on sim or dif filters
     virtual sdsl::bit_vector* calc_sim_bv(const BF* f2, int type);
     virtual sdsl::bit_vector* calc_dif_bv(const BF* f2, int type);

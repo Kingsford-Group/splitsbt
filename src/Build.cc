@@ -609,7 +609,71 @@ void dynamic_splitbuild(
     delete_bloom_tree(root);
 }
 
+void build_from_instruct(const std::string & hashes_file, const std::string & instruct_file){ //, HashPair* hp, int nh){
+    int nh = 0;
+    HashPair* hp = get_hash_function(hashes_file, nh);
+
+
+    std::ifstream ins(instruct_file.c_str());
+
+    if (!ins){
+        std::cerr << "Error reading file." << std::endl;
+    }
+
+    std::stack<std::string> lifo;    
+    std::string line;
+    while(std::getline(ins, line)){
+        std::string trim =Trim(line);
+        lifo.push(trim);
+    }
+    
+    while(!lifo.empty()){
+        std::string command = lifo.top();
+        std::cerr << "Processing command: " << command << std::endl;
+        std::vector<std::string> split;
+        char delim = ' ';
+        int num = SplitString(command, delim, split);
+
+        if (num == 3){
+            SBF* mbf = new SBF(split[0], *hp, nh, 2e9);
+            BF* bf1 = load_bf_from_file(split[1], *hp, nh);
+            BF* bf2 = load_bf_from_file(split[2], *hp, nh);
+            bf1->load();
+            bf2->load();
+
+            SBF* sbf1 = dynamic_cast<SBF*>(bf1);
+            SBF* sbf2 = dynamic_cast<SBF*>(bf2);
+            mbf->merge_bf(sbf1, sbf2);
+
+            mbf->save();
+            sbf1->save();
+            sbf2->save();
+            delete sbf1;
+            delete sbf2;
+            delete mbf;
+        } 
+
+        lifo.pop();
+    }
+}
+
 /*** NOT USED ***/
+/*
+        if (num == 3){
+            UncompressedBF* mbf = new UncompressedBF(split[0], *hp, nh, 2e9);
+            BF* bf1 = load_bf_from_file(split[1], *hp, nh);
+            BF* bf2 = load_bf_from_file(split[2], *hp, nh);
+            bf1->load();
+            bf2->load();
+
+            UncompressedBF* sbf1 = dynamic_cast<UncompressedBF*>(bf1);
+            UncompressedBF* sbf2 = dynamic_cast<UncompressedBF*>(bf2);
+            mbf->merge_bf(sbf1,sbf2);
+
+            mbf->save();
+        }
+*/
+
 /*
 // builds a near-complete bt (the last level might be only partially full)
 // with the given bf as the leaves

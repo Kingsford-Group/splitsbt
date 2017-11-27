@@ -192,7 +192,36 @@ bool query_passes(BloomTree* root, const std::set<jellyfish::mer_dna> & q) {
     return (c >= QUERY_THRESHOLD * q.size());
 }
 
+bool query_passes(BloomTree* root, batchInfo* bi){
+    auto bf = root->bf();
+    bool has_children = root->child(0) || root->child(1);
+    float c, min_pass;    
+   
+    // for each splitQueryInfo 
+    for (const auto sqi : bi->sqi_list){
+        // for each queryInfo 
+        min_pass = 0.0;
+        for (const auto & q : sqi->partial_queries){
+            c = 0.0;
 
+            min_pass += q->total_kmers * q->q_thresh;
+            
+            // determine matching in query
+            for (const auto & m : q->query_kmers){
+                if(bf->contains(m)) c++;
+            }
+        }
+    
+        // if 'not contains' is true or 'contains' is false, return false
+        if (c >= min_pass){
+            if(!has_children && sqi->type == 1) return false;
+        } else{
+            if(sqi->type == 0) return false;
+        }
+    
+    } 
+    return true;
+}
 // return true if the filter at this node contains > QUERY_THRESHOLD kmers
 // XXX: Fix query to work for BF, SBF, compressedSBF
 bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::mer_dna> & q) {
@@ -205,23 +234,23 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
 
     SplitBloomTree* sroot = dynamic_cast<SplitBloomTree*>(root);
     if (sroot == nullptr) { // start of normal query
-    if (q->weight.empty()){
-	    weighted=0;
-    } else { weighted = 1; }
-    for (const auto & m : q->query_kmers) {
+        if (q->weight.empty()){
+	        weighted=0;
+        } else { weighted = 1; }
+        for (const auto & m : q->query_kmers) {
         //DEBUG: std::cout << "checking: " << m.to_str();
-	if (weighted){
-		if(q->weight.size() > n){ 
-			weight=q->weight[n]; 
-		} else {
-			std::cerr << "Number of weights (" << q->weight.size() <<") less than query kmers (" << q->query_kmers.size() << ")."  << std::endl;
-			exit(3);
-		}
-	}
-        if (bf->contains(m)) c+=weight;
-	n++;
-        //DEBUG: std::cout << c << std::endl;
-    }
+        	if (weighted){
+	    	    if(q->weight.size() > n){ 
+		        	weight=q->weight[n]; 
+        		} else {
+    			std::cerr << "Number of weights (" << q->weight.size() <<") less than query kmers (" << q->query_kmers.size() << ")."  << std::endl;
+			    exit(3);
+		        }
+	        }
+            if (bf->contains(m)) c+=weight;
+	        n++;
+            //DEBUG: std::cout << c << std::endl;
+        }
 
     } else {// end of normal
         // tail index 
@@ -345,6 +374,25 @@ void query_from_file(
 /******
  * Batch querying
  ******/
+void print_query_results(const batchSet & bs, std::ostream & out) {
+    int count = 0;
+    for (auto& bi : bs) {
+        //out << "split query: " << count << std::endl;
+        out << "*";
+        for(auto & sqi : bi->sqi_list){
+            if (sqi->type==0) out << "+";
+            else if (sqi->type==1) out << "-";
+            for (auto & q : sqi->partial_queries){
+                out << "[" << q->query << "]";
+            }
+        }
+        out << " " << bi->matching.size() << std::endl;
+        for (const auto& n : bi->matching) {
+            out << n->name() << std::endl;
+        }
+        count++;
+    }
+}
 
 void print_query_results(const QuerySet & qs, std::ostream & out) {
     for (auto& q : qs) {
@@ -355,6 +403,38 @@ void print_query_results(const QuerySet & qs, std::ostream & out) {
     }
 }
 
+
+void split_query_batch(BloomTree* root, batchSet & bs){
+    bool has_children = root->child(0) || root->child(1);
+
+    batchSet pass;
+    unsigned n = 0;
+    for (auto & bi : bs) {
+        if (query_passes(root, bi)) { //q->query_kmers)) {
+            if (has_children) {
+                pass.emplace_back(bi);
+            } else {
+                bi->matching.emplace_back(root);
+                n++;
+            }
+        }
+    }
+     if (has_children) { //Changing format
+            std::cout << root->name() << " internal " << pass.size() << std::endl;
+        } else {
+            std::cout << root->name() << " leaf " << n << std::endl;
+        }
+
+        if (pass.size() > 0) {
+            if (root->child(0)) {
+                split_query_batch(root->child(0), pass);
+            }
+
+            if (root->child(1)) {
+                split_query_batch(root->child(1), pass);
+            }
+        }
+}
 
 void query_batch(BloomTree* root, QuerySet & qs) {
     //std::cerr << "Batch Query!" << std::endl;
@@ -680,15 +760,18 @@ void batch_splitquery_from_file(
 ) { 
     // read in the query lines from the file.
     std::string line;
-    splitQuerySet sqs;
+    batchSet bs;
     std::ifstream in(fn);
     DIE_IF(!in.good(), "Couldn't open query file.");
     std::size_t n = 0;
     while (getline(in, line)) {
+        //splitQuerySet* sqs = new splitQuerySet;
         line = Trim(line);
         // This boundary should be adjusted but really matters later
         if (line.size() < jellyfish::mer_dna::k()) continue;
         
+        batchInfo* bi = new batchInfo(root->bf(),line);
+/* 
         std::size_t left_end = 0;
         std::size_t right_end = 0;
         std::size_t index = 0;
@@ -699,13 +782,13 @@ void batch_splitquery_from_file(
             if (c == '+'){
                 left_end = right_end;
                 right_end = index;
-                sqs.emplace_back(new splitQueryInfo(root->bf(), line.substr(left_end, right_end-left_end+1),next_type));
+                sqs->emplace_back(new splitQueryInfo(root->bf(), line.substr(left_end, right_end-left_end+1),next_type));
                 next_type = 0;
                 n++;
             } else if (c == '-'){
                 left_end = right_end;
                 right_end = index;
-                sqs.emplace_back(new splitQueryInfo(root->bf(), line.substr(left_end, right_end-left_end+1),next_type));
+                sqs->emplace_back(new splitQueryInfo(root->bf(), line.substr(left_end, right_end-left_end+1),next_type));
                 next_type = 1;
                 n++;
             }
@@ -716,28 +799,32 @@ void batch_splitquery_from_file(
         right_end = index;
         //std::cerr << left_end << " " << right_end << std::endl;
         //std::cerr << "Substr: " << line.substr(left_end, right_end-left_end+1) <<  std::endl;
-        sqs.emplace_back(new splitQueryInfo(root->bf(), line.substr(left_end, right_end-left_end+1),next_type));
+        sqs->emplace_back(new splitQueryInfo(root->bf(), line.substr(left_end, right_end-left_end+1),next_type));
+*/
+        bs.emplace_back(bi);
         n++;
     }
     in.close();
     std::cerr << "Read " << n << " queries." << std::endl;
 
     // batch process the queries
-    //query_batch(root, qs);
-    //print_query_results(qs, o);
+    split_query_batch(root, bs);
+    print_query_results(bs, o);
 
     // free the query info objects
     int count = 0;
-    for (auto & p : sqs) {
+    for (auto & bi : bs) {
         std::cerr << "Query " << count << ": " << std::endl;
-        QuerySet qi = p->partial_queries;
-        for (auto & q : qi){
-            std::cerr << "Total kmers " << q->total_kmers << std::endl;
-            std::cerr << "query: " << q->query << std::endl;
-            delete q;
+        for (auto & sqi : bi->sqi_list){
+            for (auto & q : sqi->partial_queries){
+                std::cerr << "Total kmers " << q->total_kmers << std::endl;
+                std::cerr << "query: " << q->query << std::endl;
+                delete q;
+            }
+            delete sqi;
         }
         count++;
-        delete p;
+        delete bi;
     }
 }
 void batch_weightedquery_from_file(
@@ -882,7 +969,7 @@ std::vector<std::vector<std::string> > splitQuery(const std::string &s){
 
     }
 
-    // ** Add k-1 nucleotides to each block except for last block **
+    // ** Add k-1 nucleotides to the end of each block except for last block **
     for(int i = 0; i < outVect.size() - 1; i++){
         std::string substring = outVect[i+1][0].substr(0,19);
         outVect[i][0].append(substring);

@@ -113,24 +113,58 @@ struct splitQueryInfo {
         type = t;
 
         std::vector<std::vector<std::string> > parsed_sq = splitQuery(sq);
-        //partial_queries.resize(parsed_sq.size());
         int count = 0;
         for (auto & psq : parsed_sq){
             const std::string temps = psq[0];
             const float tempf = std::stof(psq[1]);
-            partial_queries.emplace_back(new QueryInfo(root, temps, tempf));
-            //partial_queries[count]=QueryInfo(root, temps, tempf);
-            //std::copy((partial_queries[count]).query_kmers.begin(), partial_queries[count].query_kmers.end(), std::inserter(total_kmers, total_kmers.end() ) );
+            QueryInfo* tempQI = new QueryInfo(root, temps, tempf);
+            partial_queries.emplace_back(tempQI);
+            // std::copy(tempQI->query_kmers.begin(), tempQI->query_kmers.end(), std::inserter(total_kmers, total_kmers.end()));
             count++;
         } 
     }
-    std::set<size_t> total_kmers;
+    //std::set<size_t> total_kmers; // disabled until used
     QuerySet partial_queries;
+    //std::vector<const BloomTree*> matching;
     //std::vector<QueryInfo> partial_queries;
     int type;
 };
 
+
 using splitQuerySet = std::list<splitQueryInfo*>;
 
+struct batchInfo{
+    batchInfo(BF* root, const std::string & line){
+        std::size_t left_end = 0;
+        std::size_t right_end = 0;
+        std::size_t index = 0;
+        int next_type = 0;
+        std::stringstream ss(line);
+        char c;
+        while (ss >> c){
+            if (c == '+'){
+                left_end = right_end;
+                right_end = index;
+                sqi_list.emplace_back(new splitQueryInfo(root, line.substr(left_end, right_end-left_end+1),next_type));
+                next_type = 0;
+            } else if (c == '-'){
+                left_end = right_end;
+                right_end = index;
+                sqi_list.emplace_back(new splitQueryInfo(root, line.substr(left_end, right_end-left_end+1),next_type));
+                next_type = 1;
+            }
+            index++;
+        }
+
+        left_end = right_end;
+        right_end = index;
+        sqi_list.emplace_back(new splitQueryInfo(root, line.substr(left_end, right_end-left_end+1),next_type));
+    }
+
+    splitQuerySet sqi_list;
+    std::vector<const BloomTree*> matching;
+};
+
+using batchSet = std::list<batchInfo*>;
 
 #endif

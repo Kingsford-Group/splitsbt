@@ -793,6 +793,20 @@ void UncompressedBF::dif_into(const BF* f2){
     }
 }
 
+void UncompressedBF::merge_bf(BF* f1, BF* f2){
+    UncompressedBF* b1 = dynamic_cast<UncompressedBF*>(f1);
+    UncompressedBF* b2 = dynamic_cast<UncompressedBF*>(f2);
+    uint64_t* this_sim_data = this->bv->data();
+    uint64_t* b1_sim_data = b1->bv->data();
+    uint64_t* b2_sim_data = b2->bv->data();
+    sdsl::bit_vector::size_type len = size()>>6;
+    for (sdsl::bit_vector::size_type p = 0; p < len; ++p){
+        (*this_sim_data) = (*b1_sim_data) | (*b2_sim_data);
+        this_sim_data++; 
+        b1_sim_data++;
+        b2_sim_data++;
+    }
+}
 /*
 Split Bloom Tree Compressed
 */
@@ -1587,9 +1601,36 @@ sdsl::bit_vector* SBF::calc_new_dif_bv(const BF* f2){
     */
 }
 
+void SBF::merge_bf(BF* f1, BF* f2){
+    SBF* b1 = dynamic_cast<SBF*>(f1);
+    SBF* b2 = dynamic_cast<SBF*>(f2);
+    if (b1 == nullptr || b2 == nullptr){
+        DIE("merge only works on two SBFs");
+    }
+
+    uint64_t* this_sim_data = this->sim->data();
+    uint64_t* this_dif_data = this->dif->data();
+    uint64_t* b1_sim_data = b1->sim->data();
+    uint64_t* b1_dif_data = b1->dif->data();
+    uint64_t* b2_sim_data = b2->sim->data();
+    uint64_t* b2_dif_data = b2->dif->data();
+    sdsl::bit_vector::size_type len = size()>>6;
+    for (sdsl::bit_vector::size_type p = 0; p < len; ++p){
+        (*this_sim_data) = (*b1_sim_data) & (*b2_sim_data);
+        (*this_dif_data) = (*b1_dif_data) | (*b2_dif_data) | ( (*b1_sim_data)^(*b2_sim_data) );
+        (*b1_sim_data) = (*b1_sim_data) ^ (*this_sim_data);
+        (*b2_sim_data) = (*b2_sim_data) ^ (*this_sim_data);
+        this_sim_data++; this_dif_data++;
+        b1_sim_data++; b1_dif_data++;
+        b2_sim_data++; b2_dif_data++;
+    }
+    
+}
+
+
+
 // The sim vector is the intersection of sim vectors
 // The difference vector is union of dif filters and new differences;
-
 
 // computes a raw similarity vector (bitwise '&') between this and input (f2)
 // type == 0 : sim vector

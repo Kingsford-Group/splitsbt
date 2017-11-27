@@ -3,6 +3,8 @@
 #include "BF.h"
 #include "gzstream.h"
 
+#include <stack>
+#include <queue>
 #include <fstream>
 #include <list>
 #include <cassert>
@@ -379,3 +381,20 @@ void write_compressed_bloom_tree(
     std::cerr << "Done." << std::endl;
 }
 
+void convert_bloom_to_build(BloomTree* root, const std::string & outfile){
+    std::queue<BloomTree*> myq;
+    std::stack<std::string> build_order;
+
+    myq.push(root);
+
+    std::ofstream out(outfile.c_str());
+    while (!myq.empty()){
+        BloomTree* temp = myq.front();
+        if (temp->num_children() == 2){
+            out << temp->name() << " " << temp->child(0)->name() << " " << temp->child(1)->name() << std::endl;
+            myq.push(temp->child(0));
+            myq.push(temp->child(1));
+        }
+        myq.pop();
+    }
+}
