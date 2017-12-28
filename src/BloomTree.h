@@ -11,6 +11,7 @@ extern int BF_INMEM_LIMIT;
 
 class BloomTree {
 public:
+    BloomTree(std::string & f);
     BloomTree(const std::string & f, HashPair hp, int nh);
     virtual ~BloomTree();
     virtual std::string name() const;

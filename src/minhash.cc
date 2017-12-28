@@ -6,14 +6,14 @@
 
 using HashPair = jellyfish::hash_pair<jellyfish::mer_dna>;
 
-int minhash(sdsl::bit_vector & bv, uint64_t seed, int numhash){
+std::vector<uint64_t> minhash(sdsl::bit_vector & bv, uint64_t seed, int numhash){
     const uint64_t* bv_data = bv.data();
     sdsl::bit_vector::size_type len = bv.size()>>6;
 
     srand(seed);
         
 
-    std::size_t minhash[numhash];
+    std::vector<uint64_t> minhash(numhash);
     uint64_t minindex[numhash];
     uint64_t i = 0;
     int first=numhash;
@@ -41,17 +41,16 @@ int minhash(sdsl::bit_vector & bv, uint64_t seed, int numhash){
     for (int hash=0; hash < numhash; hash++){
         std::cerr << "Temphead: " << hash << " " << minhash[hash] << " " << minindex[hash] << " " <<  xorarray[hash] << std::endl;
     }
-    //return minhash;
+    return minhash;
 }
 
-int minhash_fast(sdsl::bit_vector & bv, uint64_t seed, int numhash){
+std::vector<uint64_t> minhash_fast(sdsl::bit_vector & bv, uint64_t seed, int numhash){
     const uint64_t* bv_data = bv.data();
     sdsl::bit_vector::size_type len = bv.size()>>6;
-
     srand(seed);
     // *** XXX: TEMP DEBUG VALUE ***    
     bool DEBUG=0;
-    std::size_t minhash[numhash];
+    std::vector<uint64_t> minhash(numhash);
     uint64_t minindex[numhash];
     uint64_t i = 0;
     int first=numhash;
@@ -119,10 +118,10 @@ int minhash_fast(sdsl::bit_vector & bv, uint64_t seed, int numhash){
             //std::cerr << "Minhash value is: " << minhash << " at position " << minindex << " (Seed: " << seed << ")" << std::endl;
         //std::cerr << "Temphead: " << hash << " " << minhash << " " << minindex << " " <<  seed << std::endl;
     }
-    for (int hash=0; hash < numhash; hash++){
-        std::cerr << "Temphead: " << hash << " " << minhash[hash] << " " << minindex[hash] << " " <<  xorarray[hash] << std::endl;
-    }
-    //return minhash;
+    //for (int hash=0; hash < numhash; hash++){
+    //    std::cerr << "Temphead: " << hash << " " << minhash[hash] << " " << minindex[hash] << " " <<  xorarray[hash] << std::endl;
+    //}
+    return minhash;
 }
 
 int split_minhash(sdsl::bit_vector & bv, uint64_t seed, int numhash){
@@ -234,6 +233,244 @@ uint64_t bitshift_hash(uint64_t bit_index, uint64_t seed, int hash){
     //std::cerr<< outval<<std::endl;
 
 }
+
+void write_minhash(std::vector<uint64_t> myhash, std::string bvfile1){
+        std::string parse = bvfile1.substr(0, bvfile1.find_first_of("."));
+        std::cerr << parse+".minhash" << std::endl;
+        std::ofstream out_file(parse+".minhash");
+        std::ostream_iterator<uint64_t> output_iterator(out_file, "\n");
+        std::copy(myhash.begin(), myhash.end(), output_iterator);
+}
+
+std::vector<uint64_t> read_minhash(std::string file, int numhash){
+    std::vector<uint64_t> minhash(numhash);
+    std::ifstream infile(file);
+    std::string line;
+    int i = 0;
+    while (infile >> minhash[i]){
+        i++;
+    }
+    //for (i=0; i<numhash; i++){    
+    //    std::cerr << minhash[i] << " ";
+    //}
+    //std::cerr << std::endl;
+    return minhash;
+}
+/*
+int minhash_sim(std::vector<uint64_t> & mh1, std::vector<uint64_t> &mh2, int nh){
+    int sim = 0;
+    for(int i = 0; i < nh; i++){
+        if( mh1[i] == mh2[i]){
+            sim++;
+        }
+    }
+    return sim;
+}
+*/
+
+double minhash_sim(std::vector<uint64_t> & mh1, std::vector<uint64_t> &mh2, int nh){
+    double sim = 0.0;
+    for(int i = 0; i < nh; i++){
+        if( mh1[i] == mh2[i]){
+            sim++;
+        }
+    }
+    return sim / nh;
+}
+
+mh_node::mh_node(std::string file, int numhash){
+    std::string parse = file.substr(0, file.find_first_of("."));
+    fname = parse+".sim.bf.bv";
+    minhash = read_minhash(file, numhash);
+}
+
+MHcluster::MHcluster(std::string minlist, int numhash, std::string out_instruct){
+    // read in minhashes, build array of them
+    nh = numhash;
+    outfile = out_instruct;
+
+    std::ifstream list_file(minlist);
+    std::string file;
+    std::vector<uint64_t> minhash;
+
+    num_elements = 0;
+    while (list_file >> file){
+        std::cerr << num_elements << std::endl;
+        std::ifstream infile(file);
+        mh_node* mynode = new mh_node(file, numhash);
+        mhvector.push_back(mynode);
+        num_elements++;
+    }
+
+    //build the NxN distance matrix
+    std::cerr << "Calculating distance matrix..." << std::endl;
+    calcDMatrix();
+}
+
+MHcluster::~MHcluster(){
+    for(int i = 0; i < num_elements; i++){
+        delete mhvector[i];
+    }
+
+    if (distance_matrix != NULL){
+        for (int i = 1; i < num_elements; i++){
+            if (distance_matrix[i] != NULL) free(distance_matrix[i]);
+        }
+        free(distance_matrix);
+        distance_matrix = NULL;
+    }
+}
+
+bool MHcluster::calcDMatrix(){
+    int i,j;
+    int n = num_elements;
+    if (n < 2) return false;
+    
+    distance_matrix = (double**)malloc(n*sizeof(double*));
+    if(distance_matrix==NULL) return NULL;
+    distance_matrix[0]=NULL;
+    for(i = 1; i < n; i++){
+        distance_matrix[i]= (double*)malloc(i*sizeof(double));
+        if (distance_matrix[i]==NULL) break;
+    }
+
+    if (i < n){
+        j=1;
+        for(int i = 1; i < j; i++) free(distance_matrix[i]);
+        free(distance_matrix);
+        distance_matrix=NULL;
+        std::cerr << "Error. Failed to allocate memory." << std::endl;
+        return false;
+    }
+    std::cerr << "Seeding distance table" << std::endl;
+    for(i=1; i < num_elements; i++){
+        for(j=0; j < i; j++){
+            distance_matrix[i][j]=1.0-minhash_sim(mhvector[i]->minhash,mhvector[j]->minhash, nh);
+            std::cerr << i << " " << j << " " << distance_matrix[i][j] << std::endl;
+        }
+    }
+    return true;
+}
+
+//added idnex / matrix file to construct SSBT index while clustering
+void MHcluster::gcluster(const std::string &indexfile, const std::string & matrix_file){
+    // perform allsome greedy cluster
+    //allsome_gclust(num_elements, dmatrix, outfile, nh);
+
+// This is a re-implementation of the greedy clustering strategy implemented by ALLSOME SBT
+// Instead of building the tree directly, it outputs the instructions to a file for later use
+//void allsome_gclust(int nelements, double** distmatrix, std::string outfile, int nh){
+    std::map<std::string, BloomTree*> topo;
+
+    std::cerr << "Gclustering " << num_elements << " elements" << std::endl;
+    //Initialize topology for leaves
+    for(int i=0; i < num_elements; i++){
+        topo[mhvector[i]->fname]=new BloomTree(mhvector[i]->fname);
+    }
+
+    int j;
+    int n;
+    std::ofstream out(outfile.c_str());
+
+    BloomTree* newnode;
+    for (n = num_elements; n> 1; n--){
+        int is = 1;
+        int js = 0;
+        double dist = find_closest_pair(n, distance_matrix, &is, &js);
+        std::cerr << "Best: " << is << ", " << js << " " << dist << std::endl;
+        // record instruction (new node, child 1, child 2)
+        std::string parse = mhvector[is]->fname.substr(0, mhvector[is]->fname.find_last_of("/")+1);
+        std::string newname = parse+"internal_"+std::to_string(n)+"_union.sim.bf.bv";
+        out << newname <<  " " << mhvector[is]->fname << " " << mhvector[js]->fname << std::endl; 
+
+
+        //Build index here
+        newnode = new BloomTree(newname);
+        newnode->set_child(0, topo[mhvector[is]->fname]);
+        newnode->set_child(1, topo[mhvector[js]->fname]);
+        topo[newname]=newnode;
+
+        //std::cerr << topo[newname]->name() << " " << topo[newname]->child(0)->name() << " " << topo[newname]->child(1)->name() << std::endl;
+
+
+        if(js == n-1){
+            int tmp = is;
+            is = js;
+            js = tmp;
+        }
+
+        if(is != n-1){
+            unionAB2A_copyC2B(mhvector[js], mhvector[is], mhvector[n-1], newname);
+        } else{
+            unionAB2A(mhvector[js], mhvector[is], newname);
+        }
+
+        for (j = 0; j < js; j++){
+            distance_matrix[js][j] = minhash_sim(mhvector[js]->minhash,mhvector[j]->minhash, nh);
+        }
+        for (j = js+1; j < is; j++){
+            distance_matrix[j][js] = minhash_sim(mhvector[js]->minhash,mhvector[j]->minhash, nh);
+        }
+        for (j = is+1; j < n; j++){
+            distance_matrix[j][js] = minhash_sim(mhvector[js]->minhash,mhvector[j]->minhash, nh);
+        }
+
+        if(is != n-1){
+            for(j=0; j < is; j++) distance_matrix[is][j] = distance_matrix[n-1][j];
+            for(j=is+1; j < n-1; j++) distance_matrix[j][is] = distance_matrix[n-1][j];
+        }
+    }
+    write_bloom_tree(indexfile, newnode, matrix_file);
+
+    // delete topology?
+}
+
+void MHcluster::unionAB2A_copyC2B(mh_node* a, mh_node* b, mh_node* c, std::string newn){
+    a->fname=newn;
+    b->fname=c->fname;
+
+    for (int i = 0 ; i < nh; i++){
+        uint64_t aval = a->minhash[i];
+        uint64_t bval = b->minhash[i];
+        if(aval < bval){
+            a->minhash[i]=bval; //else a stays the same
+        }
+        b->minhash[i]=c->minhash[i]; 
+    } 
+}
+
+void MHcluster::unionAB2A(mh_node* a, mh_node* b, std::string newn){
+    a->fname=newn;
+    
+    for (int i = 0 ; i < nh; i++){
+        uint64_t aval = a->minhash[i];
+        uint64_t bval = b->minhash[i];
+        if(aval < bval){
+            a->minhash[i]=bval; //else a stays the same
+        } 
+    }
+}
+
+//Taken from cluster v 3.0
+double find_closest_pair(int n, double** distmatrix, int* ip, int* jp)
+{ int i, j;
+  double temp;
+  double distance = distmatrix[1][0];
+  *ip = 1;
+  *jp = 0;
+  for (i = 1; i < n; i++)
+  { for (j = 0; j < i; j++)
+    { temp = distmatrix[i][j];
+      if (temp<distance)
+      { distance = temp;
+        *ip = i;
+        *jp = j;
+      }
+    }
+  }
+  return distance;
+}
+
 /*
     int count64=0;
     for (sdsl::bit_vector::size_type p = 0; p < len; ++p){

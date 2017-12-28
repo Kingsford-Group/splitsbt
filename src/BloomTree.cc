@@ -13,6 +13,13 @@
 Heap<const BloomTree> BloomTree::bf_cache;
 int BF_INMEM_LIMIT = 30;
 
+//Topology Bloom Tree
+BloomTree::BloomTree(std::string & f){
+    filename=f;
+    children[0]=nullptr;
+    children[1]=nullptr;
+}
+
 // construct a bloom filter with the given filter backing.
 BloomTree::BloomTree(
     const std::string & f, 

@@ -215,10 +215,16 @@ int process_options(int argc, char* argv[]) {
         hashes_file=argv[optind+1];
         bvfile1=argv[optind+2]; // this is really a list of filters
     } else if (command == "build_from_instruct") {
-        if (optind >= argc-3) print_usage();
+        if (optind >= argc-2) print_usage();
         hashes_file = argv[optind+1];
         query_file = argv[optind+2];
-        out_file = argv[optind+3];
+        //out_file = argv[optind+3];
+    } else if (command == "instruct_from_minhash") {
+        if (optind >= argc-4) print_usage();
+        hashes_file = argv[optind+1];
+        bvfile1=argv[optind+2];
+        bvfile2=argv[optind+3];
+        out_file = argv[optind+4];
     }
     return optind;
 }
@@ -240,8 +246,9 @@ int main(int argc, char* argv[]) {
 
         std::cerr << "Querying..." << std::endl;
         std::ofstream out(out_file);
-
-        batch_splitquery_from_file(root, query_file, out);
+        
+        batch_query_from_file(root, query_file, out);
+        //batch_splitquery_from_file(root, query_file, out);
 /*
     	if (leaf_only == 1){
 	    	leaf_query_from_file(root, query_file, out);
@@ -443,7 +450,13 @@ int main(int argc, char* argv[]) {
         bf1->load();
         UncompressedBF* ubf1 = dynamic_cast<UncompressedBF*>(bf1);
         //std::cerr << bf1->size(0) << " " << bf1->size(1) << std::endl;
-        minhash_fast(*(ubf1->bv),0, 100);
+        std::vector<uint64_t> myhash = minhash_fast(*(ubf1->bv),0, 100);
+
+        std::string parse = bvfile1.substr(0, bvfile1.find_first_of("."));
+        std::cerr << parse+".minhash" << std::endl;
+        std::ofstream out_file(parse+".minhash");
+        std::ostream_iterator<uint64_t> output_iterator(out_file, "\n");
+        std::copy(myhash.begin(), myhash.end(), output_iterator);
     } else if (command == "sbthash"){
         int nh;
         HashPair* hp = get_hash_function(hashes_file, nh);
@@ -467,6 +480,11 @@ int main(int argc, char* argv[]) {
         //int nh;
         //HashPair* hp = get_hash_function(hashes_file, nh);
         build_from_instruct(hashes_file, query_file); //, hp, nh);
+    } else if (command == "instruct_from_minhash"){
+        MHcluster* myclust = new MHcluster(bvfile1, 100, bvfile2);
+        myclust->gcluster(out_file, hashes_file);
+
+        //read_minhash(bvfile1,100);
     }
 /*
 else if (command == "massfiltersize"){
