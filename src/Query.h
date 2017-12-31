@@ -98,6 +98,8 @@ void check_bt(BloomTree* root);
 void draw_bt(BloomTree* root, std::string outfile);
 void popcount_bt(BloomTree* root);
 void compress_bt(BloomTree* root);
+void compress_splitbt_helper(BloomTree* root, sdsl::bit_vector* noninfo);
+void compress_splitbt(BloomTree* root);
 void compress_splitbt(BloomTree* root, sdsl::bit_vector* noninfo);
 void compress_splitbt(BloomTree* root, BF* rbf); 
 void leaf_query_from_file(BloomTree* root, const std::string & fn, std::ostream & o);

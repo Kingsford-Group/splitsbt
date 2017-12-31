@@ -11,7 +11,7 @@
 #include <jellyfish/file_header.hpp>
 
 Heap<const BloomTree> BloomTree::bf_cache;
-int BF_INMEM_LIMIT = 30;
+int BF_INMEM_LIMIT = 3;
 
 //Topology Bloom Tree
 BloomTree::BloomTree(std::string & f){

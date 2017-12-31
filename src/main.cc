@@ -479,7 +479,8 @@ int main(int argc, char* argv[]) {
     } else if (command == "build_from_instruct"){
         //int nh;
         //HashPair* hp = get_hash_function(hashes_file, nh);
-        build_from_instruct(hashes_file, query_file); //, hp, nh);
+        topdown_instruct(hashes_file, query_file);
+        //build_from_instruct(hashes_file, query_file); //, hp, nh);
     } else if (command == "instruct_from_minhash"){
         MHcluster* myclust = new MHcluster(bvfile1, 100, bvfile2);
         myclust->gcluster(out_file, hashes_file);

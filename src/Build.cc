@@ -658,7 +658,7 @@ void build_from_instruct(const std::string & hashes_file, const std::string & in
 }
 
 
-void topdown_instruct(const std::string & hashes_file, const std::string & instruct_file, const std::string & out_file){ //, HashPair* hp, int nh){
+void topdown_instruct(const std::string & hashes_file, const std::string & instruct_file){ //, HashPair* hp, int nh){
     int nh = 0;
     HashPair* hp = get_hash_function(hashes_file, nh);
 
@@ -687,11 +687,14 @@ void topdown_instruct(const std::string & hashes_file, const std::string & instr
             SBF* mbf = new SBF(split[0], *hp, nh, 2e9);
             BF* bf1 = load_bf_from_file(split[1], *hp, nh);
             BF* bf2 = load_bf_from_file(split[2], *hp, nh);
-            bf1->load();
-            bf2->load();
+            //bf1->load();
+            //bf2->load();
 
             SBF* sbf1 = dynamic_cast<SBF*>(bf1);
             SBF* sbf2 = dynamic_cast<SBF*>(bf2);
+            sbf1->load();
+            sbf2->load();
+            
             mbf->merge_bf(sbf1, sbf2);
 
             mbf->save();

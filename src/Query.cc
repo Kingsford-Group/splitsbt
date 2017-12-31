@@ -91,7 +91,48 @@ void compress_bt(BloomTree* root) {
 	}
 }
 
+void compress_splitbt(BloomTree* root){
+    if (root == nullptr) return;
+    
+    //root node handled differently. Compresses just root
+    sdsl::bit_vector* noninfo = new sdsl::bit_vector(root->bf()->size());
+    root->bf()->compress(noninfo);
+
+    if (root->child(0)){
+        std::stack<BloomTree*> bfcompress;
+        bfcompress.push(root);
+
+        BloomTree* temp;
+        while(!bfcompress.empty()){
+            temp=bfcompress.top();
+            bfcompress.pop();
+            if(temp->child(0)){
+                compress_splitbt_helper(temp, noninfo);
+                bfcompress.push(temp->child(0));
+                bfcompress.push(temp->child(1));
+                //We immediately descend down the right child (FILO for stack)
+                //We will likely have to reload the left child
+                temp->child(0)->set_usage(0);
+            }
+            //We no longer need the temporary root node
+            temp->set_usage(0); 
+        }
+    }
+    delete noninfo;
+}
+
+void compress_splitbt_helper(BloomTree* root, sdsl::bit_vector* noninfo){
+    if(root->child(0)){ //redundancy
+        root->bf()->get_noninfo(noninfo);
+        root->child(0)->bf()->compress(noninfo);
+        root->bf()->get_noninfo(noninfo);
+        root->child(1)->bf()->compress(noninfo);
+    }
+}
+
 void compress_splitbt(BloomTree* root, sdsl::bit_vector* noninfo){
+    if (root == nullptr) return;
+
     root->bf()->compress(noninfo);
 
     if (root->child(0)){

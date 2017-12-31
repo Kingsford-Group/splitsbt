@@ -10,4 +10,5 @@ void build_bt_from_jfbloom(const std::vector<std::string> & leaves, const std::s
 void dynamic_build(const std::string & hashes_file, const std::vector<std::string> & leaves, const std::string & outf, const int type);
 void dynamic_splitbuild(const std::string & hashes_file, const std::vector<std::string> & leaves, const std::string & outf, const int type);
 void build_from_instruct(const std::string & hashes_file, const std::string & instruct_file);
+void topdown_instruct(const std::string & hashes_file, const std::string & instruct_file);
 #endif

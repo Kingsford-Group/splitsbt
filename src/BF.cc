@@ -903,6 +903,10 @@ SBF::SBF(const std::string & f, BF* copy, sdsl::bit_vector* noninfo) :
     uint64_t new_dif_size = full_length - noninformative - new_sim_ones;
     std::cerr << "new_dif_size: " << new_dif_size << std::endl;
 
+
+    //IF INTERNAL NODE WE HAVE TO ALSO COMPRESS DIFFERENCE
+    if (orig->filename.substr(orig->filename.size()-15) == "union.sim.bf.bv"){
+
     dif = new sdsl::bit_vector(new_dif_size);
 
     //Key pointers [and reset old ones]
@@ -932,9 +936,10 @@ SBF::SBF(const std::string & f, BF* copy, sdsl::bit_vector* noninfo) :
     }
     //Same checks as sim
     assert(new_dif_counter == new_dif_size);
-    std::cerr << "Check dif_counter: " << new_dif_counter << std::endl; 
+    //std::cerr << "Check dif_counter: " << new_dif_counter << std::endl; 
     sdsl::rank_support_v<> rbv_new_dif(dif);
-    std::cerr << "Num ones in new dif: " << rbv_new_dif(dif->size()) << std::endl;
+    //std::cerr << "Num ones in new dif: " << rbv_new_dif(dif->size()) << std::endl;
+    } // END OF INTERNAL NODE IF STATEMENT
 }
 
 // Resize constructor - BF* rm is the mask, BF* o is the original
