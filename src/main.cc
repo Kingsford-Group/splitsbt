@@ -328,8 +328,7 @@ int main(int argc, char* argv[]) {
         getline(in, header);
         std::vector<std::string> fields;
         SplitString(header, ',', fields);
-        sdsl::bit_vector* noninfo = new sdsl::bit_vector(root->bf()->size());
-        compress_splitbt(root, noninfo);
+        compress_splitbt(root, true);
         //SBF* remove_mask = new SBF("not_saved.txt", root->bf()->get_hashes(), root->bf()->get_num_hash(), root->bf()->size());
         //compress_splitbt(root, remove_mask);
         write_compressed_bloom_tree(out_file, root, fields[1]);
@@ -449,6 +448,7 @@ int main(int argc, char* argv[]) {
         BF* bf1 = load_bf_from_file(bvfile1, *hp, nh);
         bf1->load();
         UncompressedBF* ubf1 = dynamic_cast<UncompressedBF*>(bf1);
+        std::cerr << bf1->count_ones() << std::endl;
         //std::cerr << bf1->size(0) << " " << bf1->size(1) << std::endl;
         std::vector<uint64_t> myhash = minhash_fast(*(ubf1->bv),0, 100);
 

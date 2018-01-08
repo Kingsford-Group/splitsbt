@@ -295,7 +295,7 @@ MHcluster::MHcluster(std::string minlist, int numhash, std::string out_instruct)
 
     num_elements = 0;
     while (list_file >> file){
-        std::cerr << num_elements << std::endl;
+        //std::cerr << num_elements << std::endl;
         std::ifstream infile(file);
         mh_node* mynode = new mh_node(file, numhash);
         mhvector.push_back(mynode);
@@ -346,7 +346,7 @@ bool MHcluster::calcDMatrix(){
     for(i=1; i < num_elements; i++){
         for(j=0; j < i; j++){
             distance_matrix[i][j]=1.0-minhash_sim(mhvector[i]->minhash,mhvector[j]->minhash, nh);
-            std::cerr << i << " " << j << " " << distance_matrix[i][j] << std::endl;
+            //std::cerr << i << " " << j << " " << distance_matrix[i][j] << std::endl;
         }
     }
     return true;
@@ -377,12 +377,14 @@ void MHcluster::gcluster(const std::string &indexfile, const std::string & matri
         int is = 1;
         int js = 0;
         double dist = find_closest_pair(n, distance_matrix, &is, &js);
-        std::cerr << "Best: " << is << ", " << js << " " << dist << std::endl;
         // record instruction (new node, child 1, child 2)
         std::string parse = mhvector[is]->fname.substr(0, mhvector[is]->fname.find_last_of("/")+1);
         std::string newname = parse+"internal_"+std::to_string(n)+"_union.sim.bf.bv";
         out << newname <<  " " << mhvector[is]->fname << " " << mhvector[js]->fname << std::endl; 
 
+        std::cerr << "** Internal node: " << n << " **" << std::endl;
+        //std::cerr << mhvector[is]->fname << " " << mhvector[js]->fname << dist << std::endl;
+        std::cerr << "Best: " << is << ", " << js << " " << dist << std::endl;
 
         //Build index here
         newnode = new BloomTree(newname);
@@ -406,13 +408,13 @@ void MHcluster::gcluster(const std::string &indexfile, const std::string & matri
         }
 
         for (j = 0; j < js; j++){
-            distance_matrix[js][j] = minhash_sim(mhvector[js]->minhash,mhvector[j]->minhash, nh);
+            distance_matrix[js][j] = 1.0-minhash_sim(mhvector[js]->minhash,mhvector[j]->minhash, nh);
         }
         for (j = js+1; j < is; j++){
-            distance_matrix[j][js] = minhash_sim(mhvector[js]->minhash,mhvector[j]->minhash, nh);
+            distance_matrix[j][js] = 1.0-minhash_sim(mhvector[js]->minhash,mhvector[j]->minhash, nh);
         }
         for (j = is+1; j < n; j++){
-            distance_matrix[j][js] = minhash_sim(mhvector[js]->minhash,mhvector[j]->minhash, nh);
+            distance_matrix[j][js] = 1.0-minhash_sim(mhvector[js]->minhash,mhvector[j]->minhash, nh);
         }
 
         if(is != n-1){
@@ -432,8 +434,9 @@ void MHcluster::unionAB2A_copyC2B(mh_node* a, mh_node* b, mh_node* c, std::strin
     for (int i = 0 ; i < nh; i++){
         uint64_t aval = a->minhash[i];
         uint64_t bval = b->minhash[i];
-        if(aval < bval){
+        if(aval > bval){
             a->minhash[i]=bval; //else a stays the same
+            //std::cerr << "Replaced " << aval << " with " << bval << " at index " << i <<std::endl;
         }
         b->minhash[i]=c->minhash[i]; 
     } 
@@ -445,8 +448,9 @@ void MHcluster::unionAB2A(mh_node* a, mh_node* b, std::string newn){
     for (int i = 0 ; i < nh; i++){
         uint64_t aval = a->minhash[i];
         uint64_t bval = b->minhash[i];
-        if(aval < bval){
+        if(aval > bval){
             a->minhash[i]=bval; //else a stays the same
+            //std::cerr << "Replaced " << aval << " with " << bval << " at index " << i <<std::endl;
         } 
     }
 }

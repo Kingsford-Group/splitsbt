@@ -348,7 +348,7 @@ void compressedSBF::load() {
             //dif_bits = new sdsl::rrr_vector<255>(dif_size);
         }
     }
-    std::cerr << "compressedSBT Load Size: " << sim_bits->size() << " " << dif_bits->size() << std::endl;
+    std::cerr << "compressedSBT Load Size: " << sim_size << " " << dif_size << std::endl;
 }
 
 void compressedSBF::save() {

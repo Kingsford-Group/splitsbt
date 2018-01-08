@@ -91,13 +91,16 @@ void compress_bt(BloomTree* root) {
 	}
 }
 
-void compress_splitbt(BloomTree* root){
+void compress_splitbt(BloomTree* root, bool new_only){
     if (root == nullptr) return;
     
     //root node handled differently. Compresses just root
     sdsl::bit_vector* noninfo = new sdsl::bit_vector(root->bf()->size());
-    root->bf()->compress(noninfo);
-
+    if(new_only && file_exists(root->name()+".rrr")){
+        std::cerr << root->name()+".rrr" << " already exists." << std::endl;
+    } else{
+        root->bf()->compress(noninfo);
+    }
     if (root->child(0)){
         std::stack<BloomTree*> bfcompress;
         bfcompress.push(root);
@@ -107,7 +110,17 @@ void compress_splitbt(BloomTree* root){
             temp=bfcompress.top();
             bfcompress.pop();
             if(temp->child(0)){
-                compress_splitbt_helper(temp, noninfo);
+                bool compress = true;
+                if(new_only && file_exists(temp->child(0)->name()+".rrr")){
+                    std::cerr << temp->child(0)->name()+".rrr" << " already exists." << std::endl;  
+                    if(new_only && file_exists(temp->child(1)->name()+".rrr")){
+                        std::cerr << temp->child(1)->name()+".rrr" << " already exists." << std::endl;
+                        compress = false;
+                    }
+                }
+                if (compress){
+                    compress_splitbt_helper(temp, noninfo);
+                }
                 bfcompress.push(temp->child(0));
                 bfcompress.push(temp->child(1));
                 //We immediately descend down the right child (FILO for stack)
@@ -125,7 +138,7 @@ void compress_splitbt_helper(BloomTree* root, sdsl::bit_vector* noninfo){
     if(root->child(0)){ //redundancy
         root->bf()->get_noninfo(noninfo);
         root->child(0)->bf()->compress(noninfo);
-        root->bf()->get_noninfo(noninfo);
+        //root->bf()->get_noninfo(noninfo);
         root->child(1)->bf()->compress(noninfo);
     }
 }
@@ -722,7 +735,7 @@ void query_batch(BloomTree* root, QuerySet & qs) {
         
         } // if (pass.size > 0) 
     
-        std::cerr << "Completed batch_query instance " << root->bf()->get_name() << std::endl;
+        std::cerr << "Completed batch_query instance " << root->name() << std::endl;
         root->set_usage(0);
     } // else case
 } // function

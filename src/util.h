@@ -67,4 +67,6 @@ std::string VectorAsString(const std::vector<std::string> &, const std::string &
 
 int popcount(uint64_t b);
 
+bool file_exists(const std::string& name);
+bool stat_check(const std::string& name);
 #endif

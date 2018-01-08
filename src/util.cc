@@ -2,6 +2,7 @@
 #include <sstream>
 #include <fenv.h>
 #include <signal.h>
+#include <sys/stat.h>
 
 std::string quote(std::string in) {
     // TODO: handle quotes embedded in input string
@@ -131,4 +132,21 @@ int popcount(uint64_t b) {
         b >>= 1;
     }
     return count;
+}
+
+bool file_exists(const std::string& name){
+    bool exists = stat_check(name);
+    
+    if (exists && name.substr(name.size()-18) == "union.sim.bf.bv.rrr"){
+        std::ostringstream oss;
+        oss << nosuffix(name, std::string(".sim.bf.bv.rrr")) << ".dif.bf.bv.rrr";
+        exists = stat_check(oss.str());
+    }
+
+    return exists;
+}
+
+bool stat_check(const std::string& name){
+    struct stat buffer;
+    return (stat (name.c_str(), &buffer) == 0);
 }
