@@ -69,4 +69,6 @@ int popcount(uint64_t b);
 
 bool file_exists(const std::string& name);
 bool stat_check(const std::string& name);
+void hit_swap(std::vector<bool>& v, int opos, int npos);
+void array_swap(bool* array, int opos, int npos);
 #endif

@@ -24,6 +24,7 @@ struct QueryInfo {
         total_kmers = query_kmers.size();
         tail_index=total_kmers-1;
         matched_kmers=0;
+        local_kmers=0;
         q_thresh=qt;
     }
 
@@ -83,6 +84,7 @@ struct QueryInfo {
     int total_kmers;
     int tail_index;
     int matched_kmers;
+    int local_kmers;
     float q_thresh = QUERY_THRESHOLD;
 };
 
@@ -169,4 +171,86 @@ struct batchInfo{
 
 using batchSet = std::list<batchInfo*>;
 
+using kmer_type = size_t;
+
+// Stores pointers to querySet objects for each kmer
+// If tail_index is -1, no queries are using this kmer
+struct queryVec{
+    queryVec(){
+        tail_index=-1;
+    }
+    queryVec(QueryInfo* matchQ){
+        mySet.push_back(matchQ);
+        tail_index++;// = 0;//mySet.size();
+    }
+    int tail_index=-1;
+    std::vector<QueryInfo*> mySet;
+};
+
+//stores the original value of the 'kmer'
+//and the current value to map back to queries
+struct splitKmer{
+    splitKmer(){}
+
+    splitKmer(kmer_type val){
+        curr = val;
+        orig = val;
+    }
+    kmer_type curr;
+    kmer_type orig;
+};
+
+struct batchQuery{
+    batchQuery(BloomTree* root, const std::string & fn){
+        std::string line;
+        std::ifstream in(fn);
+        DIE_IF(!in.good(), "Couldn't open query file.");
+
+        std::size_t n = 0;
+        while (getline(in, line)) {
+            line = Trim(line);
+            if (line.size() < jellyfish::mer_dna::k()) continue;
+            qs.emplace_back(new QueryInfo(root->bf(), line));
+            n++;
+        }
+        in.close();
+        std::cerr << "Read " << n << " queries." << std::endl;
+
+        std::set<std::size_t> temp;
+        for (auto q : qs){
+            for (auto km : q->query_kmers){
+                //add_query_to_splitkmer(kmer_set[km],q);
+                query_vec[km].mySet.push_back(q);
+                query_vec[km].tail_index++;
+                temp.insert(km);
+            }
+        }
+        std::cerr << "Built query map with " << query_vec.size() << " elements" << std::endl;
+
+        std::vector<size_t> temp_v(temp.size());
+        std::copy(temp.begin(), temp.end(), temp_v.begin());
+
+        std::vector<splitKmer> temp_sk(temp.size());
+        batch_kmers = temp_sk;
+        for(int i =0; i< temp_v.size(); i++){
+            batch_kmers[i]=splitKmer(temp_v[i]);
+        }
+
+        std::cerr << "Built kmer vector with " << batch_kmers.size() << " elements" << std::endl;
+        
+        assert(query_vec.size() == batch_kmers.size());
+        tail_index = query_vec.size()-1;
+        std::vector<bool> myVec(query_vec.size());
+        hit_vector = myVec;
+    }
+    QuerySet qs;
+    std::unordered_map<kmer_type,queryVec> query_vec;
+    std::vector<splitKmer> batch_kmers; // the equivalent of query_kmers
+    int tail_index; 
+    std::vector<bool> hit_vector;
+    
+};
+
+void split_query_batch(BloomTree* root, batchQuery & bq);
+void batchkmer_swap(std::vector<splitKmer>& v, int opos, int npos);
 #endif

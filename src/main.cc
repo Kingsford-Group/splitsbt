@@ -245,9 +245,11 @@ int main(int argc, char* argv[]) {
         std::cerr << "In memory limit = " << BF_INMEM_LIMIT << std::endl;
 
         std::cerr << "Querying..." << std::endl;
-        std::ofstream out(out_file);
+        batchQuery bq = batchQuery(root, query_file);
+        split_query_batch(root, bq);
+        //std::ofstream out(out_file);
         
-        batch_query_from_file(root, query_file, out);
+        //batch_query_from_file(root, query_file, out);
         //batch_splitquery_from_file(root, query_file, out);
 /*
     	if (leaf_only == 1){
@@ -328,7 +330,12 @@ int main(int argc, char* argv[]) {
         getline(in, header);
         std::vector<std::string> fields;
         SplitString(header, ',', fields);
-        compress_splitbt(root, true);
+        
+        //sdsl::bit_vector* noninfo = new sdsl::bit_vector(root->bf()->size());
+        //compress_splitbt(root, noninfo);
+
+        compress_splitbt(root, false);
+
         //SBF* remove_mask = new SBF("not_saved.txt", root->bf()->get_hashes(), root->bf()->get_num_hash(), root->bf()->size());
         //compress_splitbt(root, remove_mask);
         write_compressed_bloom_tree(out_file, root, fields[1]);

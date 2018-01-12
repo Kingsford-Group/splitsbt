@@ -150,3 +150,16 @@ bool stat_check(const std::string& name){
     struct stat buffer;
     return (stat (name.c_str(), &buffer) == 0);
 }
+
+void hit_swap(std::vector<bool>& v, int opos, int npos){
+    auto temp = v[npos];
+    v[npos]=v[opos];
+    v[opos]=temp;
+}
+
+void array_swap(bool* array, int opos, int npos){
+    auto temp = array[npos];
+    array[npos]=array[opos];
+    array[opos]=temp;
+
+}

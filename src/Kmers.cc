@@ -44,6 +44,8 @@ std::list<jellyfish::mer_dna> list_kmers_in_string(const std::string & str){
 }
 */
 
+
+// to exactly equal the SBT implementation as a set of kmers
 std::vector<jellyfish::mer_dna> vector_kmers_in_string(const std::string & str){
     auto k = jellyfish::mer_dna::k();
     std::set<jellyfish::mer_dna> s;
@@ -54,6 +56,7 @@ std::vector<jellyfish::mer_dna> vector_kmers_in_string(const std::string & str){
     std::copy(s.begin(), s.end(), v.begin());
     return v;
 }
+
 /*
 std::vector<jellyfish::mer_dna> vector_kmers_in_string(const std::string & str){
     auto k = jellyfish::mer_dna::k();
