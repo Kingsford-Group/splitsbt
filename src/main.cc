@@ -245,8 +245,18 @@ int main(int argc, char* argv[]) {
         std::cerr << "In memory limit = " << BF_INMEM_LIMIT << std::endl;
 
         std::cerr << "Querying..." << std::endl;
-        batchQuery bq = batchQuery(root, query_file);
-        split_query_batch(root, bq);
+        
+        boolQuery bq = boolQuery(root, query_file);
+        bool_query_batch(root, bq);
+
+        //for (auto& bqI : bq.bs){
+        //    std::cerr << "Local: " << bqI->localPasses() << std::endl;
+        //    std::cerr << "Global: " << bqI->globalPasses() << std::endl;
+        //}
+
+        //batchQuery bq = batchQuery(root, query_file);
+        //split_query_batch(root, bq);
+        
         //std::ofstream out(out_file);
         
         //batch_query_from_file(root, query_file, out);
@@ -489,8 +499,8 @@ int main(int argc, char* argv[]) {
         topdown_instruct(hashes_file, query_file);
         //build_from_instruct(hashes_file, query_file); //, hp, nh);
     } else if (command == "instruct_from_minhash"){
-        MHcluster* myclust = new MHcluster(bvfile1, 100, bvfile2);
-        myclust->gcluster(out_file, hashes_file);
+        MHcluster* myclust = new MHcluster(bvfile1, 100, bvfile2); //bvfile2 is build instructions
+        myclust->gcluster(out_file, hashes_file); //outfile is indexfile
 
         //read_minhash(bvfile1,100);
     }

@@ -1,4 +1,4 @@
-#INCLUDES = -I ~/include
+INCLUDES = -I /usr/include/boost 
 #LIBS = -L ~/lib 
 #CXXFLAGS= -std=c++11 -O0 -g $(shell pkg-config --cflags htslib && echo "-DHAVE_HTSLIB") $(shell pkg-config --cflags jellyfish-2.0) $(shell pkg-config --cflags sdsl-lite) $(INCLUDES) $(LIBS)
 CXXFLAGS= -std=c++11 -O3 $(shell pkg-config --cflags htslib && echo "-DHAVE_HTSLIB") $(shell pkg-config --cflags jellyfish-2.0) $(shell pkg-config --cflags sdsl-lite) $(INCLUDES) $(LIBS)

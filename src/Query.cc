@@ -459,6 +459,148 @@ void print_query_results(const QuerySet & qs, std::ostream & out) {
     }
 }
 
+// ** THE CURRENT BATCH CODE **
+void bool_query_batch(BloomTree* root, boolQuery & bq){
+    bool has_children = root->child(0) || root->child(1);
+    auto bf = root->bf();
+    bool search_flag = false;
+    bool pass_flag = false;
+
+    compressedSBF* cbf = dynamic_cast<compressedSBF*>(bf);
+    if (cbf == nullptr){
+        DIE("Could not convert to compressedSBF");
+    }
+
+    //Query for all active kmers
+    std::cerr << "Querying node " << root->name() << std::endl;
+    //If we track the original tail index we can only tally elements which are newly inactivated
+    //This would allow us to run a tally if we dont use iterators
+    
+    int init_ti = bq.tail_index;
+    //std::cerr << bq.tail_index << std::endl;
+    for (int i =0; i <= bq.tail_index; i++){
+        auto m = bq.batch_kmers[i].curr;
+        std::cerr << "query: " <<  m << " " << cbf->contains(m,0) << " " << cbf->contains(m,1) << std::endl;
+        if(cbf->contains(m,0)){
+            bq.hit_vector[i]=true;
+            if(i != bq.tail_index){ //don't swap if the thing is itself (pointless)
+                batchkmer_swap(bq.batch_kmers, i, bq.tail_index);
+                hit_swap(bq.hit_vector, i, bq.tail_index);
+            }
+            bq.tail_index--;
+            i--;
+        } else if (cbf->contains(m,1)){
+            bq.hit_vector[i]=true;
+        } else{
+            bq.hit_vector[i]=false;
+            if(i != bq.tail_index){
+                batchkmer_swap(bq.batch_kmers, i, bq.tail_index);
+                hit_swap(bq.hit_vector, i, bq.tail_index);
+            }
+            bq.tail_index--;
+            i--;
+        }
+    }
+
+    std::cerr << bq.tail_index << std::endl;
+    //Determine if queries have passed or not
+    int c = 0;
+    int g = 0;
+
+    //Initialize sums to 0
+    int count = 0;
+    for(QuerySet::iterator it = bq.qs.begin(); it != bq.qs.end(); ++it){
+        //std::cerr << (*it)->local_kmers << " " << (*it)->matched_kmers << std::endl;
+        (*it)->matched_kmers = 0;
+        (*it)->local_kmers = 0;
+        count++;
+    }
+    std::cerr << "Reset " << count << " queries." << std::endl;
+
+    // XXX: turn QueryInfo into a class for more complex operations
+    int i = 0;
+    // If we stop at init_ti+1 we need to store matched_kmers at each node for each query.
+    // Assumption: This is a negative efficiency for batch query
+    //for(std::vector<splitKmer>::iterator it = bq.batch_kmers.begin(); it != bq.batch_kmers.begin()+init_ti+1; ++it){
+    for(std::vector<splitKmer>::iterator it = bq.batch_kmers.begin(); it != bq.batch_kmers.end(); ++it){
+        if(bq.hit_vector[i]){
+            queryVec qv = bq.query_vec[(*it).orig];
+            for(QuerySet::iterator qt = qv.mySet.begin(); qt != qv.mySet.end(); ++qt){
+                if(i <= bq.tail_index){
+                    (*qt)->local_kmers++; 
+                } else{
+                    (*qt)->matched_kmers++;
+                }
+                std::cerr << (*it).curr << " " << (*qt)->local_kmers << " " << (*qt)->matched_kmers << std::endl;
+            }
+        }
+        i++;
+    }
+
+    // Check if our queries have passed
+    for(boolQuerySet::iterator it = bq.bs.begin(); it != bq.bs.end(); ++it){
+        if(!(*it)->globalPasses()){
+            search_flag = true;
+        }
+
+        if((*it)->localPasses()){
+            pass_flag = true;
+            //record our final hits
+            if(!has_children){
+                (*it)->matching.emplace_back(root);
+                std::cerr << root->name() << " " << " matched " << std::endl;
+            }
+        }
+    }
+
+    //Update kmer index positions
+    int tail_index=-1;
+    if(has_children && search_flag){
+        tail_index = bq.tail_index;
+        sdsl::rank_support_rrr<1,255> rbv_sim(cbf->sim_bits);
+        sdsl::rank_support_rrr<0,255> rbv_dif(cbf->dif_bits);
+
+        for(int i =0; i <= bq.tail_index; i++){
+            auto m = bq.batch_kmers[i].curr;
+            assert(m <= cbf->size(0));
+            size_t sim_ones = rbv_sim(m);
+            assert(m-sim_ones <= cbf->size(1));
+            size_t dif_ones = rbv_dif(m-sim_ones);
+            bq.batch_kmers[i].curr=m-sim_ones-dif_ones;
+        }
+    } 
+
+    if (has_children && pass_flag){
+        if(root->child(0)){
+            root->set_usage(0);
+            bool_query_batch(root->child(0),bq);
+            bq.tail_index = tail_index;
+            bool_query_batch(root->child(1),bq);
+            bq.tail_index = tail_index;
+        }
+    }
+    
+    //recover previous values in batch_kmers
+    if(has_children && search_flag){
+        cbf = dynamic_cast<compressedSBF*>(root->bf()); //reload root if necessary
+        sdsl::select_support_rrr<0,255> sbv_sim(cbf->sim_bits);
+        sdsl::select_support_rrr<1,255> sbv_dif(cbf->dif_bits);
+
+        size_t sim_size = cbf->sim_bits->size();
+        size_t dif_size = cbf->dif_bits->size();
+
+        for(int i = 0; i <= bq.tail_index; i++){
+            auto & m = bq.batch_kmers[i].curr;
+            if(m >= dif_size){
+                std::cerr << "m: " << m << " geq than dif filter size of " << dif_size << std::endl;
+                DIE("This shouldnt happen!");
+            }
+            size_t dif_pos = sbv_dif(m+1);
+            assert(dif_pos < dif_size);
+            bq.batch_kmers[i].curr=sbv_sim(dif_pos+1);
+        }
+    }
+}
 
 void split_query_batch(BloomTree* root, batchQuery & bq){
     bool has_children = root->child(0) || root->child(1);
@@ -614,7 +756,6 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
             bq.batch_kmers[i].curr=sbv_sim(dif_pos+1);
         }
     }
-    
 }
 
 // XXX: This is misnamed. It's not a split query at all!
@@ -1152,6 +1293,9 @@ void batchkmer_swap(std::vector<splitKmer>& v, int opos, int npos){
 //
 template<typename QueryStruct>
 
+
+
+
 void split(const std::string &s, char delim, QueryStruct result) {
     std::stringstream ss(s);
     std::string item;
@@ -1206,4 +1350,33 @@ std::vector<std::vector<std::string> > splitQuery(const std::string &s){
     }
     */
     return outVect;
+}
+
+
+/******************** Code for binary tree boolean logic parser **************************/
+bool local_match(QuerySet& subQueries, const var& v){
+    QueryInfo* myQ = subQueries[std::stoi(v)];
+    std::cerr << "Performing local query on " << myQ->query << std::endl;
+    std::cerr << "Matched kmer: " << myQ->matched_kmers << std::endl;
+    std::cerr << "Local Kmer: " << myQ->local_kmers << std::endl;
+    std::cerr << "Total kmer: " << myQ->total_kmers << std::endl;
+    std::cerr << "q thresh: " << myQ->q_thresh << std::endl;
+    return ( (myQ->matched_kmers + myQ->local_kmers) > myQ->total_kmers * myQ->q_thresh );
+}
+
+bool global_match(QuerySet& subQueries, const var& v){
+    QueryInfo* myQ = subQueries[std::stoi(v)];
+    std::cerr << "Performing global query on " << myQ->query << std::endl;
+    std::cerr << "Matched kmer: " << myQ->matched_kmers << std::endl;
+    std::cerr << "Total kmer: " << myQ->total_kmers << std::endl;
+    std::cerr << "q thresh: " << myQ->q_thresh << std::endl;
+    return ( myQ->matched_kmers > myQ->total_kmers * myQ->q_thresh);
+}
+
+bool local_query(QuerySet& qs, const expr& e){
+    return boost::apply_visitor(localMatch(qs), e);
+}
+
+bool global_query(QuerySet& qs, const expr& e){
+    return boost::apply_visitor(globalMatch(qs), e);
 }

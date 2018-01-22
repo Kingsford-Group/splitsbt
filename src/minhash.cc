@@ -352,7 +352,7 @@ bool MHcluster::calcDMatrix(){
     return true;
 }
 
-//added idnex / matrix file to construct SSBT index while clustering
+//added index / matrix file to construct SSBT index while clustering
 void MHcluster::gcluster(const std::string &indexfile, const std::string & matrix_file){
     // perform allsome greedy cluster
     //allsome_gclust(num_elements, dmatrix, outfile, nh);
