@@ -27,10 +27,10 @@ std::string bvfile1, bvfile2;
 std::string of_sim, of_dif;
 int sim_type=2;
 std::string bloom_storage;
-int leaf_only;
+bool leaf_only=false;
 std::string weighted="";
 unsigned cutoff_count=3;
-
+bool new_only=false;
 std::string hashes_file;
 unsigned nb_hashes;
 uint64_t bf_size;
@@ -46,9 +46,10 @@ static struct option LONG_OPTIONS[] = {
     {"query-threshold", required_argument, 0, 't'},
     {"k", required_argument, 0, 'k'},
     {"sim-type", required_argument, 0, 's'},
-    {"leaf-only", required_argument,0,'l'},
+    {"leaf-only", no_argument,0,'l'},
     {"cutoff", required_argument,0,'c'},
     {"weighted", required_argument,0,'w'},
+    {"new-only", no_argument,0,'n'},
     {0,0,0,0}
 };
 
@@ -63,10 +64,14 @@ void print_usage() {
         << "    \"check\" bloomtreefile\n"
         << "    \"draw\" bloomtreefile out.dot\n"
 
-        << "    \"query\" [--max-filters 1] [-t 0.8] [-leaf-only 0] [--weighted weightfile] bloomtreefile queryfile outfile\n"
-
+        << "    \"query\" [--max-filters 1] [-t 0.8] bloomtreefile queryfile outfile\n"
+        << "    \"batch_query\" [--max-filters 1] [-t 0.8] bloomtreefile queryfile outfile\n"
+        << "    \"bool_query\" [--max-filters 1] [-t 0.8] bloomtreefile queryfile outfile\n"
         << "    \"convert\" jfbloomfilter outfile\n"
         << "    \"sim\" [--sim-type 0] bloombase bvfile1 bvfile2\n"
+        << "    \"minhash\" hashfile bvfile\n"
+        << "    \"instruct_from_minhash\" hashfile minhash_list out_instruction out_index \n"
+        << "    \"build_from_instruct\" hashfile instruction_file\n"
         << std::endl;
     exit(3);
 }
@@ -103,7 +108,7 @@ int process_options(int argc, char* argv[]) {
                 BF_INMEM_LIMIT = unsigned(atoi(optarg));
                 break;
 	        case 'l':
-		        leaf_only = atoi(optarg);
+		        leaf_only = true;
                  break;
             case 'k': 
                 k = atoi(optarg);
@@ -116,6 +121,8 @@ int process_options(int argc, char* argv[]) {
 		break;
 	    case 'w':
 		weighted = optarg;
+        case 'n':
+        new_only = true;
 		break;	
             default:
                 std::cerr << "Unknown option." << std::endl;
@@ -134,8 +141,16 @@ int process_options(int argc, char* argv[]) {
         bloom_tree_file = argv[optind+1];
         query_file = argv[optind+2];
         out_file = argv[optind+3];
-        //leaf_only = argv[optind+4];
-
+    } else if (command == "batch_query") {
+        if (optind >= argc-3) print_usage();
+        bloom_tree_file = argv[optind+1];
+        query_file = argv[optind+2];
+        out_file = argv[optind+3];
+    } else if (command == "bool_query") {
+        if (optind >= argc-3) print_usage();
+        bloom_tree_file = argv[optind+1];
+        query_file = argv[optind+2];
+        out_file = argv[optind+3];
     } else if (command == "check") {
         if (optind >= argc-1) print_usage();
         bloom_tree_file = argv[optind+1];
@@ -244,34 +259,54 @@ int main(int argc, char* argv[]) {
 
         std::cerr << "In memory limit = " << BF_INMEM_LIMIT << std::endl;
 
-        std::cerr << "Querying..." << std::endl;
         
-        boolQuery bq = boolQuery(root, query_file);
-        bool_query_batch(root, bq);
-
-        //for (auto& bqI : bq.bs){
+                //for (auto& bqI : bq.bs){
         //    std::cerr << "Local: " << bqI->localPasses() << std::endl;
         //    std::cerr << "Global: " << bqI->globalPasses() << std::endl;
         //}
 
-        //batchQuery bq = batchQuery(root, query_file);
-        //split_query_batch(root, bq);
-        
-        //std::ofstream out(out_file);
+                //std::ofstream out(out_file);
         
         //batch_query_from_file(root, query_file, out);
         //batch_splitquery_from_file(root, query_file, out);
-/*
-    	if (leaf_only == 1){
-	    	leaf_query_from_file(root, query_file, out);
-    	} else if (weighted!="") {
-	    	std::cerr << "Weighted query \n";
-		    batch_weightedquery_from_file(root, query_file, weighted, out);	
-    	} else {
-	        batch_query_from_file(root, query_file, out);
-    	}
-*/
 
+    	if (leaf_only == 1){
+            std::cerr << "Leaf query is not valid in SSBT. \n";
+            std::cerr << "Done. \n";
+	    	//leaf_query_from_file(root, query_file, out);
+    	} else if (weighted!="") {
+	    	std::cerr << "Weighted queries have been replaced with boolean queries \n";
+            std::cerr << "Done. \n";
+		    //batch_weightedquery_from_file(root, query_file, weighted, out);	
+    	} else {
+            std::cerr << "Querying..." << std::endl;
+            std::ofstream out(out_file);
+            batch_query_from_file(root, query_file, out);
+        }
+
+    } else if (command == "batch_query"){
+        std::cerr << "Loading bloom tree topology: " << bloom_tree_file << std::endl;
+        SplitBloomTree* root = read_split_bloom_tree(bloom_tree_file);
+        std::cerr << "In memory limit = " << BF_INMEM_LIMIT << std::endl;
+        std::cerr << "Building Query Set..." << std::endl;
+        batchQuery bq = batchQuery(root, query_file);
+        std::cerr << "Batch Querying..." << std::endl;
+        split_query_batch(root, bq);
+        
+        std::ofstream out(out_file);
+        print_batch_query(bq, out);
+
+    } else if (command == "bool_query"){
+        std::cerr << "Loading bloom tree topology: " << bloom_tree_file << std::endl;
+        SplitBloomTree* root = read_split_bloom_tree(bloom_tree_file);
+        std::cerr << "In memory limit = " << BF_INMEM_LIMIT << std::endl;
+
+        std::cerr << "Querying..." << std::endl;
+        boolQuery bq = boolQuery(root, query_file);
+        bool_query_batch(root, bq);
+
+        std::ofstream out(out_file);
+        print_bool_query(bq, out);
     } else if (command == "draw") {
         std::cerr << "Drawing tree in " << bloom_tree_file << " to " << out_file << std::endl;
         BloomTree* root = read_bloom_tree(bloom_tree_file, false);
@@ -344,7 +379,7 @@ int main(int argc, char* argv[]) {
         //sdsl::bit_vector* noninfo = new sdsl::bit_vector(root->bf()->size());
         //compress_splitbt(root, noninfo);
 
-        compress_splitbt(root, false);
+        compress_splitbt(root, new_only);
 
         //SBF* remove_mask = new SBF("not_saved.txt", root->bf()->get_hashes(), root->bf()->get_num_hash(), root->bf()->size());
         //compress_splitbt(root, remove_mask);

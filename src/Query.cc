@@ -459,6 +459,25 @@ void print_query_results(const QuerySet & qs, std::ostream & out) {
     }
 }
 
+void print_batch_query(const batchQuery & bq, std::ostream & out) {
+    for (auto& q : bq.qs) {
+        out << "*" << q->query << " " << q->matching.size() << std::endl;
+        for (const auto& n : q->matching) {
+            out << n->name() << std::endl;
+        }
+    }
+}
+
+void print_bool_query(const boolQuery & bq, std::ostream & out) {
+    for (auto& q : bq.qs) {
+        out << "*" << q->query << " " << q->matching.size() << std::endl;
+        for (const auto& n : q->matching) {
+            out << n->name() << std::endl;
+        }
+    }
+}
+
+
 // ** THE CURRENT BATCH CODE **
 void bool_query_batch(BloomTree* root, boolQuery & bq){
     bool has_children = root->child(0) || root->child(1);
@@ -622,7 +641,7 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
     //std::cerr << bq.tail_index << std::endl;
     for (int i =0; i <= bq.tail_index; i++){
         auto m = bq.batch_kmers[i].curr;
-        std::cerr << "query: " <<  m << " " << cbf->contains(m,0) << " " << cbf->contains(m,1) << std::endl;
+        //std::cerr << "query: " <<  m << " " << cbf->contains(m,0) << " " << cbf->contains(m,1) << std::endl;
         if(cbf->contains(m,0)){
             bq.hit_vector[i]=true;
             if(i != bq.tail_index){ //don't swap if the thing is itself (pointless)
@@ -660,6 +679,7 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
     int i = 0;
     // If we stop at init_ti+1 we need to store matched_kmers at each node for each query.
     // Assumption: This is a negative efficiency for batch query
+    // Note: We aren't actually querying these extras so it's just an O(1) cost to lookup the value per kmer
     //for(std::vector<splitKmer>::iterator it = bq.batch_kmers.begin(); it != bq.batch_kmers.begin()+init_ti+1; ++it){
     for(std::vector<splitKmer>::iterator it = bq.batch_kmers.begin(); it != bq.batch_kmers.end(); ++it){
         if(bq.hit_vector[i]){
@@ -670,48 +690,38 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
                 } else{
                     (*qt)->matched_kmers++;
                 }
-                std::cerr << (*it).curr << " " << (*qt)->local_kmers << " " << (*qt)->matched_kmers << std::endl;
+                //std::cerr << (*it).curr << " " << (*qt)->local_kmers << " " << (*qt)->matched_kmers << std::endl;
             }
         }
         i++;
     }
 
     // Check if our queries have passed
+    int n = 0;
     for(QuerySet::iterator it = bq.qs.begin(); it != bq.qs.end(); ++it){
         if((*it)->matched_kmers < (*it)->q_thresh * (*it)->total_kmers){
             search_flag = true;
         }
 
         if((*it)->matched_kmers + (*it)->local_kmers >= (*it)->total_kmers * (*it)->q_thresh){
+            n++;
             pass_flag = true;
             //record our final hits
             if(!has_children){
                 (*it)->matching.emplace_back(root);
-                std::cerr << root->name() << " " << " matched " << std::endl;
+                //std::cerr << root->name() << " " << " matched " << std::endl;
             }
         }
     }
 
-    /*
-    for (int i = 0; i < bq.batch_kmers.size(); i++){
-        if(i <= bq.tail_index){
-            if(bq.hit_vector[i]) c++;
-        } else{
-            if(bq.hit_vector[i]) g++;
-        }
-    }
-    //std::cerr << "Results: " << c << " " << g << std::endl;
+    std::cerr << "Has Children: " << has_children << std::endl;
+    std::cerr << "Search Flag: " << search_flag << std::endl;
+    std::cerr << "Pass Flag: " << pass_flag << std::endl;
+    std::cerr << "Pass #: " << n << std::endl;
     
-    if (g >= QUERY_THRESHOLD * bq.batch_kmers.size()){
-        search_flag = false;
-    }
-    if (c+g >= QUERY_THRESHOLD * bq.batch_kmers.size()){
-        pass_flag = true;
-    }
-    */
     //Update kmer index positions
     int tail_index=-1;
-    if(has_children && search_flag){
+    if(has_children && search_flag && pass_flag){
         tail_index = bq.tail_index;
         sdsl::rank_support_rrr<1,255> rbv_sim(cbf->sim_bits);
         sdsl::rank_support_rrr<0,255> rbv_dif(cbf->dif_bits);
@@ -727,17 +737,21 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
     } 
 
     if (has_children && pass_flag){
+        std::cerr << "Should see Query blah blah." << std::endl;
         if(root->child(0)){
             root->set_usage(0);
+            std::cerr << "Query 0-child." << std::endl;
             split_query_batch(root->child(0),bq);
             bq.tail_index = tail_index;
+            std::cerr << "Query 1-child." << std::endl;
             split_query_batch(root->child(1),bq);
             bq.tail_index = tail_index;
         }
     }
     
     //recover previous values in batch_kmers
-    if(has_children && search_flag){
+    if(has_children && search_flag && pass_flag){
+        std::cerr << "Recovering old index values..." << std::endl;
         cbf = dynamic_cast<compressedSBF*>(root->bf()); //reload root if necessary
         sdsl::select_support_rrr<0,255> sbv_sim(cbf->sim_bits);
         sdsl::select_support_rrr<1,255> sbv_dif(cbf->dif_bits);
