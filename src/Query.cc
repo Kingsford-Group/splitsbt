@@ -621,6 +621,7 @@ void bool_query_batch(BloomTree* root, boolQuery & bq){
     }
 }
 
+//For batch queries still processing
 void split_query_batch(BloomTree* root, batchQuery & bq){
     bool has_children = root->child(0) || root->child(1);
     auto bf = root->bf();
@@ -714,10 +715,10 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
         }
     }
 
-    std::cerr << "Has Children: " << has_children << std::endl;
-    std::cerr << "Search Flag: " << search_flag << std::endl;
-    std::cerr << "Pass Flag: " << pass_flag << std::endl;
-    std::cerr << "Pass #: " << n << std::endl;
+    //std::cerr << "Has Children: " << has_children << std::endl;
+    //std::cerr << "Search Flag: " << search_flag << std::endl;
+    //std::cerr << "Pass Flag: " << pass_flag << std::endl;
+    std::cerr << "Search, Pass, Pass #: " << search_flag << ", " << pass_flag << ", " << n << std::endl;
     
     //Update kmer index positions
     int tail_index=-1;
@@ -736,16 +737,20 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
         }
     } 
 
+    root->set_usage(0);
     if (has_children && pass_flag){
-        std::cerr << "Should see Query blah blah." << std::endl;
-        if(root->child(0)){
-            root->set_usage(0);
-            std::cerr << "Query 0-child." << std::endl;
+        if(search_flag){
+            //std::cerr << "Query 0-child." << std::endl;
             split_query_batch(root->child(0),bq);
             bq.tail_index = tail_index;
-            std::cerr << "Query 1-child." << std::endl;
+            //std::cerr << "Query 1-child." << std::endl;
             split_query_batch(root->child(1),bq);
             bq.tail_index = tail_index;
+        } else {
+            //std::cerr << "Query 0-child." << std::endl;
+            split_noquery_batch(root->child(0),bq);
+            //std::cerr << "Query 1-child." << std::endl;
+            split_noquery_batch(root->child(1),bq);
         }
     }
     
@@ -770,6 +775,48 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
             bq.batch_kmers[i].curr=sbv_sim(dif_pos+1);
         }
     }
+}
+
+//Once we have 'passed' or 'failed' every query and just need to find the leaves
+//We can 'skip' the loading / query step for these branches
+void split_noquery_batch(BloomTree* root, batchQuery & bq){
+    bool has_children = root->child(0) || root->child(1);
+    bool search_flag = false;
+    bool pass_flag = true;
+
+    std::cerr << "Skipping node " << root->name() << std::endl;
+
+    int n = 0;
+    for(QuerySet::iterator it = bq.qs.begin(); it != bq.qs.end(); ++it){
+        if((*it)->matched_kmers > (*it)->q_thresh * (*it)->total_kmers){
+            n++;
+            //record our final hits
+            if(!has_children){
+                (*it)->matching.emplace_back(root);
+                //std::cerr << root->name() << " " << " matched " << std::endl;
+            }
+        }
+    }
+
+    if(n==0){
+        std::cerr << "Error! Skipping while having zero passing queries! (Setting pass flag to false)" << std::endl;
+        pass_flag=false;
+    }
+    //std::cerr << "Has Children: " << has_children << std::endl;
+    //std::cerr << "Search Flag: " << search_flag << std::endl;
+    //std::cerr << "Pass Flag: " << pass_flag << std::endl;
+    std::cerr << "Search, Pass, Pass #: " << search_flag << ", " << pass_flag << ", " << n << std::endl;
+
+    if (has_children && pass_flag){
+        if(root->child(0)){
+            root->set_usage(0); //never loaded shouldn't matter
+            //std::cerr << "Query 0-child." << std::endl;
+            split_noquery_batch(root->child(0),bq);
+            //std::cerr << "Query 1-child." << std::endl;
+            split_noquery_batch(root->child(1),bq);
+        }
+    }
+
 }
 
 // XXX: This is misnamed. It's not a split query at all!

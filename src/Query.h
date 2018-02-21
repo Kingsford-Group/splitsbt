@@ -451,6 +451,7 @@ struct batchQuery{
 };
 
 void split_query_batch(BloomTree* root, batchQuery & bq);
+void split_noquery_batch(BloomTree* root, batchQuery & bq);
 void print_batch_query(const batchQuery & bq, std::ostream & out);
 void bool_query_batch(BloomTree* root, boolQuery & bq);
 void print_bool_query(const boolQuery & bq, std::ostream & out);
