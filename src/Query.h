@@ -157,6 +157,15 @@ struct QueryInfo {
     int matched_kmers;
     int local_kmers;
     float q_thresh = QUERY_THRESHOLD;
+
+    bool localPasses()
+    {
+        return matched_kmers + local_kmers >= total_kmers * q_thresh;
+    }
+    bool globalPasses()
+    {
+        return matched_kmers >= total_kmers * q_thresh;
+    }
 };
 
 
@@ -445,7 +454,9 @@ struct batchQuery{
     QuerySet qs;
     std::unordered_map<kmer_type,queryVec> query_vec;
     std::vector<splitKmer> batch_kmers; // the equivalent of query_kmers
-    int tail_index; 
+    // Tail index guarantees local vs global distinction ONLY FOR QUERIES WHICH MAY STILL PASS (Deactivation due to query)
+    int tail_index; //This records local vs global hit / misses (de-activation due to sim hits / dif misses)
+    //int qb_tail_index; //query_based tail index handles queries which are deactivated due to no passing query
     std::vector<bool> hit_vector;
     
 };

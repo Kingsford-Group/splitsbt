@@ -323,7 +323,7 @@ bool query_passes(BloomTree* root, QueryInfo*  q) {//const std::set<jellyfish::m
             //}
             //std::cerr << i << " " << q->tail_index << std::endl;
             compressedSBF* cbf = dynamic_cast<compressedSBF*>(bf);
-            std::cerr << m << " " << cbf->contains(m,0) << " " << cbf->contains(m,1) << std::endl;
+            //std::cerr << m << " " << cbf->contains(m,0) << " " << cbf->contains(m,1) << std::endl;
             if (cbf == nullptr){
                 DIE("Could not convert to compressedSBF");
             }
@@ -649,7 +649,7 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
     //If we track the original tail index we can only tally elements which are newly inactivated
     //This would allow us to run a tally if we dont use iterators
     
-    int init_ti = bq.tail_index;
+    //int init_ti = bq.tail_index;
     //std::cerr << bq.tail_index << std::endl;
     for (int i =0; i <= bq.tail_index; i++){
         auto m = bq.batch_kmers[i].curr;
@@ -676,9 +676,6 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
     }
 
     std::cerr << bq.tail_index << std::endl;
-    //Determine if queries have passed or not
-    int c = 0;
-    int g = 0;
 
     //Initialize sums to 0
     for(QuerySet::iterator it = bq.qs.begin(); it != bq.qs.end(); ++it){
@@ -711,11 +708,13 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
     // Check if our queries have passed
     int n = 0;
     for(QuerySet::iterator it = bq.qs.begin(); it != bq.qs.end(); ++it){
-        if((*it)->matched_kmers < (*it)->q_thresh * (*it)->total_kmers){
+        //if((*it)->matched_kmers < (*it)->q_thresh * (*it)->total_kmers){
+        if(!(*it)->globalPasses()){
             search_flag = true;
         }
 
-        if((*it)->matched_kmers + (*it)->local_kmers >= (*it)->total_kmers * (*it)->q_thresh){
+        //if((*it)->matched_kmers + (*it)->local_kmers >= (*it)->total_kmers * (*it)->q_thresh){
+        if((*it)->localPasses()){
             n++;
             pass_flag = true;
             //record our final hits
@@ -730,11 +729,34 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
     //std::cerr << "Search Flag: " << search_flag << std::endl;
     //std::cerr << "Pass Flag: " << pass_flag << std::endl;
     std::cerr << "Search, Pass, Pass #: " << search_flag << ", " << pass_flag << ", " << n << std::endl;
-    
-    //Update kmer index positions
-    int tail_index=-1;
+
+    //Deactivate additional kmers (those belonging to queries which did not pass)
+    //bq.qb_tail_index = bq.tail_index;
+
+    for (int i =0; i <= bq.tail_index; i++){
+        auto m = bq.batch_kmers[i].orig;
+        queryVec qv = bq.query_vec[m];
+        bool passK=false;
+        for(std::vector<QueryInfo*>::iterator qt = qv.mySet.begin(); qt != qv.mySet.end(); ++qt){
+            if ((*qt)->localPasses()){
+                passK=true;
+            }
+        }
+        if(!passK){
+            if(i != bq.tail_index){
+                batchkmer_swap(bq.batch_kmers, i, bq.tail_index);
+                hit_swap(bq.hit_vector, i, bq.tail_index);
+            }
+            bq.tail_index--;
+            i--;    
+        }
+    }
+
+
+    //Update kmer index positions (and record current TI's for future recovery)
+    int tail_index = bq.tail_index;
+    //int qb_tail_index=bq.qb_tail_index;
     if(has_children && search_flag && pass_flag){
-        tail_index = bq.tail_index;
         sdsl::rank_support_rrr<1,255> rbv_sim(cbf->sim_bits);
         sdsl::rank_support_rrr<0,255> rbv_dif(cbf->dif_bits);
 
@@ -754,9 +776,11 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
             //std::cerr << "Query 0-child." << std::endl;
             split_query_batch(root->child(0),bq);
             bq.tail_index = tail_index;
+            //bq.qb_tail_index = qb_tail_index;
             //std::cerr << "Query 1-child." << std::endl;
             split_query_batch(root->child(1),bq);
             bq.tail_index = tail_index;
+            //bq.qb_tail_index = qb_tail_index;
         } else {
             //std::cerr << "Query 0-child." << std::endl;
             split_noquery_batch(root->child(0),bq);
