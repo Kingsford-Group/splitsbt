@@ -494,8 +494,8 @@ void bool_query_batch(BloomTree* root, boolQuery & bq){
     std::cerr << "Querying node " << root->name() << std::endl;
     //If we track the original tail index we can only tally elements which are newly inactivated
     //This would allow us to run a tally if we dont use iterators
-    
-    int init_ti = bq.tail_index;
+   
+    int init_ti = bq.tail_index; 
     //std::cerr << bq.tail_index << std::endl;
     for (int i =0; i <= bq.tail_index; i++){
         auto m = bq.batch_kmers[i].curr;
@@ -521,18 +521,13 @@ void bool_query_batch(BloomTree* root, boolQuery & bq){
         }
     }
 
-    std::cerr << bq.tail_index << std::endl;
-    //Determine if queries have passed or not
-    int c = 0;
-    int g = 0;
+    //std::cerr << bq.tail_index << std::endl;
 
     //Initialize sums to 0
-    int count = 0;
     for(QuerySet::iterator it = bq.qs.begin(); it != bq.qs.end(); ++it){
         //std::cerr << (*it)->local_kmers << " " << (*it)->matched_kmers << std::endl;
         (*it)->matched_kmers = 0;
         (*it)->local_kmers = 0;
-        count++;
     }
     //std::cerr << "Reset " << count << " queries." << std::endl;
 
@@ -550,7 +545,7 @@ void bool_query_batch(BloomTree* root, boolQuery & bq){
                 } else{
                     (*qt)->matched_kmers++;
                 }
-                std::cerr << (*it).curr << " " << (*qt)->local_kmers << " " << (*qt)->matched_kmers << std::endl;
+                //std::cerr << (*it).curr << " " << (*qt)->local_kmers << " " << (*qt)->matched_kmers << std::endl;
             }
         }
         i++;
@@ -577,9 +572,8 @@ void bool_query_batch(BloomTree* root, boolQuery & bq){
      std::cerr << "Search, Pass, Pass #: " << search_flag << ", " << pass_flag << ", " << n << std::endl;
 
     //Update kmer index positions
-    int tail_index=-1;
+    int tail_index=bq.tail_index;
     if(has_children && search_flag && pass_flag){
-        tail_index = bq.tail_index;
         sdsl::rank_support_rrr<1,255> rbv_sim(cbf->sim_bits);
         sdsl::rank_support_rrr<0,255> rbv_dif(cbf->dif_bits);
 
@@ -649,7 +643,9 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
     //If we track the original tail index we can only tally elements which are newly inactivated
     //This would allow us to run a tally if we dont use iterators
     
-    //int init_ti = bq.tail_index;
+    // We store the initial tail index (as its passed in) so that we can recover matched_kmers later
+    // We do this recovery but subtracting the values from matched_kmers between init_ti and the final_ti
+    int init_ti = bq.tail_index;
     //std::cerr << bq.tail_index << std::endl;
     for (int i =0; i <= bq.tail_index; i++){
         auto m = bq.batch_kmers[i].curr;
@@ -675,12 +671,11 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
         }
     }
 
-    std::cerr << bq.tail_index << std::endl;
-
+    //std::cerr << bq.tail_index << std::endl;
     //Initialize sums to 0
     for(QuerySet::iterator it = bq.qs.begin(); it != bq.qs.end(); ++it){
-        //std::cerr << (*it)->local_kmers << " " << (*it)->matched_kmers << std::endl;
-        (*it)->matched_kmers = 0;
+        //std::cerr << "Matched kmers(Begin): " << (*it)->matched_kmers << std::endl;
+        //(*it)->matched_kmers = 0;
         (*it)->local_kmers = 0;
     }
 
@@ -689,8 +684,7 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
     // If we stop at init_ti+1 we need to store matched_kmers at each node for each query.
     // Assumption: This is a negative efficiency for batch query
     // Note: We aren't actually querying these extras so it's just an O(1) cost to lookup the value per kmer
-    //for(std::vector<splitKmer>::iterator it = bq.batch_kmers.begin(); it != bq.batch_kmers.begin()+init_ti+1; ++it){
-    for(std::vector<splitKmer>::iterator it = bq.batch_kmers.begin(); it != bq.batch_kmers.end(); ++it){
+    for(std::vector<splitKmer>::iterator it = bq.batch_kmers.begin(); it != bq.batch_kmers.begin()+init_ti+1; ++it){
         if(bq.hit_vector[i]){
             queryVec qv = bq.query_vec[(*it).orig];
             for(std::vector<QueryInfo*>::iterator qt = qv.mySet.begin(); qt != qv.mySet.end(); ++qt){
@@ -714,6 +708,8 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
         }
 
         //if((*it)->matched_kmers + (*it)->local_kmers >= (*it)->total_kmers * (*it)->q_thresh){
+
+        //std::cerr << (*it)->local_kmers << " " << (*it)->matched_kmers << std::endl;
         if((*it)->localPasses()){
             n++;
             pass_flag = true;
@@ -729,7 +725,6 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
     //std::cerr << "Search Flag: " << search_flag << std::endl;
     //std::cerr << "Pass Flag: " << pass_flag << std::endl;
     std::cerr << "Search, Pass, Pass #: " << search_flag << ", " << pass_flag << ", " << n << std::endl;
-
     //Deactivate additional kmers (those belonging to queries which did not pass)
     //bq.qb_tail_index = bq.tail_index;
 
@@ -737,12 +732,21 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
         auto m = bq.batch_kmers[i].orig;
         queryVec qv = bq.query_vec[m];
         bool passK=false;
-        for(std::vector<QueryInfo*>::iterator qt = qv.mySet.begin(); qt != qv.mySet.end(); ++qt){
+        for(QuerySet::iterator qt = qv.mySet.begin(); qt != qv.mySet.end(); ++qt){
             if ((*qt)->localPasses()){
                 passK=true;
             }
         }
         if(!passK){
+            //std::cerr << i << " " << m << " " << bq.hit_vector[i] << std::endl;
+            // These queries contain deactivated local matches that cannot affect the outcome. 
+            // To avoid recording a distinctio nbetween deactivated global hits and deactivated local hits
+            // We treat them all as global as the total can never lead to a faulty global pass.
+            if(bq.hit_vector[i]){
+                for(std::vector<QueryInfo*>::iterator qt = qv.mySet.begin(); qt != qv.mySet.end(); ++qt){
+                    (*qt)->matched_kmers++;
+                }
+            }
             if(i != bq.tail_index){
                 batchkmer_swap(bq.batch_kmers, i, bq.tail_index);
                 hit_swap(bq.hit_vector, i, bq.tail_index);
@@ -751,10 +755,11 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
             i--;    
         }
     }
-
-
+    
     //Update kmer index positions (and record current TI's for future recovery)
-    int tail_index = bq.tail_index;
+    int final_ti = bq.tail_index;
+
+    std::cerr << "Init_ti: " << init_ti << ", final_ti: " << final_ti << std::endl;
     //int qb_tail_index=bq.qb_tail_index;
     if(has_children && search_flag && pass_flag){
         sdsl::rank_support_rrr<1,255> rbv_sim(cbf->sim_bits);
@@ -764,7 +769,7 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
             auto m = bq.batch_kmers[i].curr;
             assert(m <= cbf->size(0));
             size_t sim_ones = rbv_sim(m);
-            assert(m-sim_ones <= cbf->size(1));
+            assert(m-sim_ones <= cbf->size(0));
             size_t dif_ones = rbv_dif(m-sim_ones);
             bq.batch_kmers[i].curr=m-sim_ones-dif_ones;
         }
@@ -775,11 +780,11 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
         if(search_flag){
             //std::cerr << "Query 0-child." << std::endl;
             split_query_batch(root->child(0),bq);
-            bq.tail_index = tail_index;
+            bq.tail_index = final_ti;
             //bq.qb_tail_index = qb_tail_index;
             //std::cerr << "Query 1-child." << std::endl;
             split_query_batch(root->child(1),bq);
-            bq.tail_index = tail_index;
+            bq.tail_index = final_ti;
             //bq.qb_tail_index = qb_tail_index;
         } else {
             //std::cerr << "Query 0-child." << std::endl;
@@ -789,7 +794,19 @@ void split_query_batch(BloomTree* root, batchQuery & bq){
         }
     }
     
-    //recover previous values in batch_kmers
+    //recover previous values for matched_kmers for each query
+    // ti can only decrement between init and final. If they are the same, loop won't process
+    for (int i=final_ti+1; i <= init_ti; i++){
+        auto m = bq.batch_kmers[i].orig;
+        queryVec qv = bq.query_vec[m];
+        if(bq.hit_vector[i]){
+            for(std::vector<QueryInfo*>::iterator qt = qv.mySet.begin(); qt != qv.mySet.end(); ++qt){
+                (*qt)->matched_kmers--;
+            }
+        }
+    }
+    
+    //recover previous values in batch_kmers if they previously were changed
     if(has_children && search_flag && pass_flag){
         std::cerr << "Recovering old index values..." << std::endl;
         cbf = dynamic_cast<compressedSBF*>(root->bf()); //reload root if necessary

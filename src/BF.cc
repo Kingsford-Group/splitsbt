@@ -336,16 +336,18 @@ void compressedSBF::load() {
         sim_size = sim_bits->size();
     } 
     if (dif_bits == nullptr){
-        if (fn.substr(fn.size()-19) == "union.sim.bf.bv.rrr"){
-            dif_bits = new sdsl::rrr_vector<255>();
-            if(!sdsl::load_from_file(*dif_bits, this->get_dif_name())){
-                std::cerr << "Failed to load: " << this->get_dif_name() << std::endl;
+        if(fn.size() >= 19){
+            if (fn.substr(fn.size()-19) == "union.sim.bf.bv.rrr"){
+                dif_bits = new sdsl::rrr_vector<255>();
+                if(!sdsl::load_from_file(*dif_bits, this->get_dif_name())){
+                    std::cerr << "Failed to load: " << this->get_dif_name() << std::endl;
+                }
+                dif_size = dif_bits->size();
+            } else {
+                sdsl::rank_support_rrr<1,255> rbv_sim(sim_bits);
+                dif_size = sim_size-rbv_sim(sim_size);
+                //dif_bits = new sdsl::rrr_vector<255>(dif_size);
             }
-            dif_size = dif_bits->size();
-        } else {
-            sdsl::rank_support_rrr<1,255> rbv_sim(sim_bits);
-            dif_size = sim_size-rbv_sim(sim_size);
-            //dif_bits = new sdsl::rrr_vector<255>(dif_size);
         }
     }
     std::cerr << "compressedSBT Load Size: " << sim_size << " " << dif_size << std::endl;
@@ -461,12 +463,14 @@ bool compressedSBF::contains(const size_t pos, int type) const{
         if (dif_bits == nullptr) return false;
         sdsl::rank_support_rrr<1, 255> rbv_sim(sim_bits);
         size_t offset = rbv_sim.rank(pos);
-        if(pos >= offset){
+        if(pos < offset){
             std::cerr << "Error - offset exceeds position value (pos-offset negative)" << std::endl;
+            std::cerr << pos << " " << offset << std::endl;
             assert(pos>= offset); //non-negative boundary
         }
-        if(pos-offset<dif_bits->size()){
+        if(pos-offset>=dif_bits->size()){
             std::cerr << "Error - offset is too small. (pos-offset exceeds dif vector size)" << std::endl;
+            std::cerr << pos << " " << offset << " " << dif_bits->size() << std::endl;
             assert(pos-offset<dif_bits->size()); //not larger then dif boundary
         }
         if ((*dif_bits)[pos-offset] == 0) return false;
@@ -1095,13 +1099,15 @@ void SBF::load() {
             std::cerr << "Failed to load: " << fn << std::endl;
         }
         if (dif == nullptr){
-            if (fn.substr(fn.size()-15) == "union.sim.bf.bv"){
-                dif = new sdsl::bit_vector(); 
-                if (!sdsl::load_from_file(*dif, this->get_dif_name())){
-                    std::cerr << "Failed to load: " << this->get_dif_name() << std::endl;
+            if (fn.size() >= 15){
+                if (fn.substr(fn.size()-15) == "union.sim.bf.bv"){
+                    dif = new sdsl::bit_vector(); 
+                    if (!sdsl::load_from_file(*dif, this->get_dif_name())){
+                        std::cerr << "Failed to load: " << this->get_dif_name() << std::endl;
+                    }
+                } else {
+                    dif = new sdsl::bit_vector(sim->size());
                 }
-            } else {
-                dif = new sdsl::bit_vector(sim->size());
             }
         }
     }

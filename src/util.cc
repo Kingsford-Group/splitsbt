@@ -15,8 +15,10 @@ std::string test_basename(const std::string & str, const std::string & suff) {
     auto p = str.rfind("/");
     std::string s = (p == std::string::npos) ? str : str.substr(p+1);
     auto end = s.size() - suff.size();
-    if (s.substr(end) == suff) {
-        return s.substr(0, s.size() - suff.size());
+    if (end >= 0){
+        if (s.substr(end) == suff) {
+            return s.substr(0, s.size() - suff.size());
+        }
     }
     return s;
 }
@@ -24,8 +26,10 @@ std::string test_basename(const std::string & str, const std::string & suff) {
 std::string nosuffix(const std::string & str, const std::string & suff) {
     std::string s = str;
     auto end = s.size() - suff.size();
-    if (s.substr(end) == suff) {
-        return s.substr(0, s.size() - suff.size());
+    if (end >= 0){
+        if (s.substr(end) == suff) {
+            return s.substr(0, s.size() - suff.size());
+        }
     }
     return s;
 
@@ -136,11 +140,13 @@ int popcount(uint64_t b) {
 
 bool file_exists(const std::string& name){
     bool exists = stat_check(name);
-    
-    if (exists && name.substr(name.size()-18) == "union.sim.bf.bv.rrr"){
-        std::ostringstream oss;
-        oss << nosuffix(name, std::string(".sim.bf.bv.rrr")) << ".dif.bf.bv.rrr";
-        exists = stat_check(oss.str());
+
+    if (name.size() >= 18){    
+        if (exists && name.substr(name.size()-18) == "union.sim.bf.bv.rrr"){
+            std::ostringstream oss;
+            oss << nosuffix(name, std::string(".sim.bf.bv.rrr")) << ".dif.bf.bv.rrr";
+            exists = stat_check(oss.str());
+        }
     }
 
     return exists;
