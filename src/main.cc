@@ -25,7 +25,7 @@ std::string out_file;
 std::string jfbloom_file;
 std::string bvfile1, bvfile2;
 std::string of_sim, of_dif;
-int sim_type=2;
+int sim_type=1;
 std::string bloom_storage;
 bool leaf_only=false;
 std::string weighted="";

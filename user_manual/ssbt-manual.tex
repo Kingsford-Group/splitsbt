@@ -3,26 +3,22 @@
 \usepackage{secdot}
 \usepackage{listings}
 
-\title{Split Sequence Bloom Tree $<$pre-release$>$ User Guide}
+\title{Split Sequence Bloom Tree v1.0 User Guide}
 \author{Brad Solomon and Carl Kingsford}
 \begin{document}
 \maketitle
 
 \section{Synopsis}
 
-SSBT is a program that will allow you to index a set of short-read sequencing experiments and then query them quickly for a given sequence. The first step to use SSBT is to create such an index. This is done via the ``hashes'', ``count'',  ``build'', and ``compress'' commands. Then you can query that index for any sequence to find the files in which that sequence likely appears.
+SSBT is a program that will allow you to index a set of short-read sequencing experiments and then query them quickly for a given sequence. The first step to use SSBT is to create such an index. This is done via the ``hashes'', ``count'',  ``build'', and ``compress'' commands. Then you can query that index for any sequence to find the files in which that sequence likely appears. \\
 
-If you use SBT, please cite:
-\begin{itemize}
-\item $<$pre-release$>$
-%Brad Solomon and Carl Kingsford.
-%Large-Scale Search of Transcriptomic Read Sets with Sequence Bloom Trees. 
-%bioRxiv, 2015. doi: http://dx.doi.org/10.1101/017087
-\end{itemize}
+If you use SSBT, please cite:\\
+
+Brad Solomon and Carl Kingsford. Improved Search of Large Transcriptomic Sequencing Databases Using Split Sequence Bloom Trees. Journal of Computational Biology. 2018. http://doi.org/10.1089/cmb.2017.0265
 
 \section{Analysis Pipeline Overview}
 
-To build and query a dataset using SSBT, you should follow this general pipeline:
+To build and query a dataset using SSBT, you should follow one of two general pipelines. The first is the original SSBT method introduced at RECOMB 2017. It uses a greedy insertion schema which should be sufficient for most trees of size $<100$ TBases. The general pipeline works as follows:
 \begin{enumerate}
 \item You first initialize the hash functions by running ``hashes'' command. 
 \item Convert each fasta file in the database to a bloom filter bit vector using the  ``count'' command. 
@@ -32,7 +28,21 @@ To build and query a dataset using SSBT, you should follow this general pipeline
 \end{enumerate}
 More details are given below.
 
+If you are working on a larger dataset or are interested in producing a smaller overall index with a significantly shorter construction time at the cost of additional pre-processing steps, you should use the SSBT re-implementation of the SBT-ALSO (Sun Chen, Harris Robert S., Chikhi Rayan, and Medvedev Paul.Journal of Computational Biology. 2018. http://doi.org/10.1089/cmb.2017.0258). Our version uses a minhash schema to identify global pairwise similarity. This modified pipeline works as follows:
+\begin{enumerate}
+\item You first initialize the hash functions by running ``hashes'' command. 
+\item Convert each fasta file in the database to a bloom filter bit vector using the  ``count'' command. 
+\item \textbf{Construct a minhash sketch for each bloom filter using the ``minhash'' command.}
+\item \textbf{Construct an ``instructions file'' from the ``instruct\_from\_minhash'' command.}
+\item \textbf{Build the SSBT using the ``build\_from\_instruct'' command.}
+\item Compress the bit vectors that make up the entire tree using the built in ``compress'' command.
+\item Save your input queries as a line-separated text file and run the ``query'' command with the desired threshold and using the compressed SSBT file.
+\end{enumerate}
+More details are given below.
+
 \section{Analysis Pipeline Details}
+
+\subsection{RECOMB 2017 Construction Schema}
 
 You first initialize the hash functions by running ``hashes'' command. The parameter \verb+hashfile+ is the hashfile output by the ``hashes'' command, the parameter \verb+-k+ sets the kmer index size (default 20), and the parameter \verb+nb_hashes+ sets the number of hash functions to use. A typical value for this is $1$:
 %
@@ -50,7 +60,7 @@ bt count [--cutoff 3] [--threads 16] hashfile bf_size fasta_in.fasta filter_out.
 \end{verbatim}
 \end{quote}
 %
-Although we recommend using the default values for cutoff and counting threads, it is possible to adjust the minimum count required for a k-mer to be added to the bloom filter with the \verb+--cutoff+ parameter (the default is to include any element with a count of 3 or greater) or to adjust the number of threads used by the Jellyfish library with the \verb+--threads+ parameter. The parameter \verb+hashfile+ is output from the previous ``hashes'' command and the \verb+bf_size+ gives the bloom filter size. Although \verb+bf_size+ can be set arbitrarily large, we suggest setting the bloom filter size to the total count of unique kmers being inserted into the SSBT. We have provided a Jellyfish script (get\_bfsize.sh) which takes in a list of fasta.gz files and compiles the total count of unique canonical kmers by their frequency in the total file set. Regardless of the tool used or number selected, it must be the SAME for all files that you are putting into the same SSBT. If you have lots of files on which to build a SSBT, you should write a little script that uses the above command to create a bloom filter for each. Something like:
+\textbf{Note that the output from the count command is a Sequence Bloom Filter! Conversion to a Split Sequence Bloom Filter is as easy as renaming the extension to ``.sim.bf.bv''. To use SSBT, you MUST convert your bloom filters.} Although we recommend using the default values for cutoff and counting threads, it is possible to adjust the minimum count required for a k-mer to be added to the bloom filter with the \verb+--cutoff+ parameter (the default is to include any element with a count of 3 or greater) or to adjust the number of threads used by the Jellyfish library with the \verb+--threads+ parameter. The parameter \verb+hashfile+ is output from the previous ``hashes'' command and the \verb+bf_size+ gives the bloom filter size. Although \verb+bf_size+ can be set arbitrarily large, we suggest setting the bloom filter size to the total count of unique kmers being inserted into the SSBT. We have provided a Jellyfish script (get\_bfsize.sh) which takes in a list of fasta.gz files and compiles the total count of unique canonical kmers by their frequency in the total file set. Regardless of the tool used or number selected, it must be the SAME for all files that you are putting into the same SSBT. If you have lots of files on which to build a SSBT, you should write a little script that uses the above command to create a bloom filter for each. Something like:
 %
 \begin{quote}
 \begin{verbatim}
@@ -85,7 +95,34 @@ bt query [--max-filters 1] [-t 0.8] [--leaf-only 0]
 \end{quote}
 Here, \verb+-t+ gives the sensitivity threshold: the number of kmers that must be present for a query to be found. Values closer to 1 reduce the number of false positives. You can also weight the individual kmers in the query file by providing a complete array of weights for each kmer in a space separated weightfile.
 
-The ``check'', ``draw'', and ``sim'' subcommands can be used to carry out more specialized tasks. See details below.
+\subsection{Alternative Minhash Construction}
+The alternative minhash schema diverges slightly from the original pipeline in the construction step. The primary divergence is the construction of a minhash sketch for each bloom filter. This is done through the ``minhash'' command as follows:
+
+\begin{quote}
+\begin{verbatim}
+bt minhash hashfile bloomfilter.bf.bv
+\end{verbatim}
+\end{quote}
+
+The minhash sketch will have the same filename as ``bloomfilter.bf.bv'' but with the extension ``.minhash''. It will automatically be written to the same directory as the bloom filter. 
+
+Once you have a minhash for each bloom filter in your dataset, you can run the ``instruct\_from\_minhash'' command as follows:
+
+\begin{quote}
+\begin{verbatim}
+bt instruct_from_minhash hashfile minhash_list out_instruction out_index
+\end{verbatim}
+\end{quote}
+
+Given the hashfile and a list of minhashes, the ``instruct\_from\_minhash'' command will construct a list of instructions (out\_instruction) and the output index that the instruction set will build (out\_index). The list of instructions are human readable and indicate the exact order of merges necessary to produce an SSBT from the input set. This construction schema will write each file to disk at most twice -- once to construct the internal node as a parent for two leaves and once to construct a parent node from a node. The output index is equivalent to the bloomtreefile from the ``build'' command; however in order to use this out\_index as an SSBT, you have to build a tree from this set of instructions as follows:
+
+\begin{quote}
+\begin{verbatim}
+bt build_from_instruct hashfile instruction_file
+\end{verbatim}
+\end{quote}
+
+This will parse the instruction command to produce the SSBT index on the bloomfilters matching the minhash sketches. For this command to work properly, the bloom filters must be ``.sim.bf.bv'' extensions and located in the same directory as the minhash sketches. If they are not located in the same directory, you can manually adjust the instruction file to provide the proper path. 
 
 \section{Command Descriptions}
 
@@ -206,7 +243,7 @@ This will batch query the bloom tree encoded by 'mySSBT.bloomtree' for every lin
 
 % XXX: Convert is depricated from when we used jfbloomfilters and isn't worth talking about.
 \subsection{Sim}
-\textit{bt sim [--sim-type 0] hashfile bvfile1 bvfile2}
+\textit{bt sim [--sim-type 1] hashfile bvfile1 bvfile2}
 \begin{itemize}
 \item \textbf{sim-type} is an option that defines the similarity metric used. (0) uses the default Hamming distance between two bit vectors while (1) uses a Jaccard index metric.
 \item \textbf{hashfile} is the location of the hashfile written using the ``hashes'' function
@@ -218,6 +255,50 @@ To test the raw bit similarity between two bloom filters encoded by the SSBT, us
 
 \textit{bt sim hashfile.hh SRR0001.bf.bv SRR0002.bf.bv} \\
 
-This will return the similarity using either the default Hamming (0) or Jaccard (1) metrics.
+This will return the similarity using either the default Hamming (0) or Jaccard (1) metrics. We recommend using the Jaccard coefficient for most standard operations. The SSBT has several other similarity metrics, including a similarity coefficient which prioritizes any shared 1-valued bits in the similarity vector and breaks ties by comparing similarity in the remainder vector. This unnamed similarity is sim-type (2). 
+
+\subsection{Minhash}
+\textit{bt minhash hashfile bvfile}
+\begin{itemize}
+\item \textbf{hashfile} is the location of the hashfile written using the ``hashes'' function
+\item \textbf{bvfile} is any SSBT bit vector constructed using the ``count'' function.
+\end{itemize}
+\textbf{Usage:}
+
+To construct a minhash sketch for a bit vector, use a command like: \\
+
+\textit{bt minhash hashfile.hh SRR0001.bf.bv} \\
+
+The minhash sketch is internally set to use 100 hashes and will always write with the same name and file location (but ``.minhash'' extension) as the bit vector file. The current implementation supports up to 275 hashes. The SSBT minhash uses an integer to integer xorshift hash (George Marsaglia. Xorshift RNGs. 2003.) using the index of each 1-valued bit in a bloom filter for each hash.
+
+\subsection{Instruct\_from\_minhash}
+\textit{bt instruct\_from\_minhash hashfile minhash\_list out\_instruction out\_index}
+\begin{itemize}
+\item \textbf{hashfile} is the location of the hashfile written using the ``hashes'' function
+\item \textbf{minhash\_list} is line-separated text-file containing the full path of a set of minhash sketches. 
+\item \textbf{out\_instruction} is the absolute path (or filename) for the output list of instructions needed to build a global pairwise construction SSBT using the smallest number of writes to disk.
+\item \textbf{out\_index} is the equivalent file for the SSBT ``build'' command's bloomtreefile. It records the SSBT structure that can be constructed from the instruction set.
+\end{itemize}
+\textbf{Usage:}
+
+To build an instruction file from a set of minhash sketches, use a command like: \\
+
+\textit{bt instruct\_from\_minhash hashfile.hh minhash\_list.txt mh\_build\_instructions.txt ssbt\_out.txt} \\
+
+This will produce the instructions necessary for construction and provide the output file needed post-construction. \textbf{The ssbt\_out.txt file produced by this process will not work without constructing the tree from the instruction set (see Build from Instruct).}
+
+\subsection{Build\_from\_instruct}
+\textit{bt build\_from\_instruct hashfile instruction\_file}
+\begin{itemize}
+\item \textbf{hashfile} is the location of the hashfile written using the ``hashes'' function
+\item \textbf{instruction\_file} is the instruction set produced by ``instruct\_from\_minhash'' and saved to ``out\_instruction''.
+\end{itemize}
+\textbf{Usage:}
+
+To build an SSBT from an instruction file, use a command like: \\
+
+\textit{bt build\_from\_instruct hashfile.hh mh\_build\_instructions.txt} \\
+
+This will produce the uncompressed SSBT defined by the instruction's out\_index. At this point, you can treat the output file identically to one produced through the base build.
 
 \end{document}
